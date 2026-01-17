@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useAccount, useReadContract, useWriteContract } from 'wagmi'
-import { parseEther, formatEther, keccak256, toBytes } from 'viem'
+import { parseEther, formatEther, keccak256, toBytes, http, createPublicClient } from 'viem'
 import { contractConfig, getProofStatusText, getMilestoneStatusText } from '@/lib/contracts'
 
 export default function TestContractsPage() {
@@ -13,6 +13,8 @@ export default function TestContractsPage() {
   // Campaign 表单状态
   const [campaignId, setCampaignId] = useState('1')
   const [donationAmount, setDonationAmount] = useState('0.001')
+  const [allCampaigns, setAllCampaigns] = useState<any[]>([])
+  const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false)
   const [newCampaign, setNewCampaign] = useState({
     title: '测试项目 - 医疗救助',
     description: '这是一个测试项目，用于验证合约功能。目标是为需要帮助的人提供医疗援助。',
@@ -105,6 +107,73 @@ export default function TestContractsPage() {
       addLog(`✅ 查询成功`)
     } catch (error: any) {
       addLog(`❌ 查询失败: ${error.message}`)
+    }
+  }
+
+  const handleFetchAllCampaigns = async () => {
+    if (!address) {
+      addLog('❌ 请先连接钱包')
+      return
+    }
+
+    setIsLoadingCampaigns(true)
+    addLog('📊 开始查询所有项目...')
+
+    try {
+      // 获取项目总��
+      const count = campaignCount?.toString() || '0'
+      const totalCount = parseInt(count)
+
+      if (totalCount === 0) {
+        addLog('⚠️ 暂无项目')
+        setAllCampaigns([])
+        setIsLoadingCampaigns(false)
+        return
+      }
+
+      addLog(`📊 发现 ${totalCount} 个项目，开始查询详情...`)
+
+      // 批量查询所有项目
+      const campaigns: any[] = []
+      const publicClient = createPublicClient({
+        transport: http('https://testnet-rpc.monad.xyz'),
+      })
+
+      for (let i = 1; i <= totalCount; i++) {
+        try {
+          const result = await publicClient.readContract({
+            ...contractConfig.campaignRegistry,
+            functionName: 'getCampaign',
+            args: [BigInt(i)],
+          }) as any
+
+          // 只显示活跃状态的项目
+          if (result && result.status === 0) {
+            // 同时查询项目在 MilestoneVault 中的余额
+            try {
+              const balance = await publicClient.readContract({
+                ...contractConfig.milestoneVault,
+                functionName: 'getCampaignBalance',
+                args: [BigInt(i)],
+              })
+              result.vaultBalance = balance
+            } catch (error) {
+              result.vaultBalance = BigInt(0)
+            }
+
+            campaigns.push(result)
+          }
+        } catch (error: any) {
+          addLog(`⚠️ 项目 ${i} 查询失败: ${error.message}`)
+        }
+      }
+
+      setAllCampaigns(campaigns)
+      addLog(`✅ 成功查询 ${campaigns.length} 个活跃项目`)
+    } catch (error: any) {
+      addLog(`❌ 查询失败: ${error.message}`)
+    } finally {
+      setIsLoadingCampaigns(false)
     }
   }
 
@@ -581,6 +650,25 @@ export default function TestContractsPage() {
                   </div>
                 </div>
               </div>
+
+              <div className="bg-white rounded-lg shadow p-6 border-2 border-purple-200">
+                <h2 className="text-xl font-semibold mb-4">📋 查询所有项目</h2>
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600">
+                    查询所有活跃状态的项目列表，包括基本信息和余额
+                  </p>
+                  <button
+                    onClick={handleFetchAllCampaigns}
+                    disabled={!isConnected || isLoadingCampaigns}
+                    className="w-full bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 disabled:bg-gray-300"
+                  >
+                    {isLoadingCampaigns ? '查询中...' : '📊 查询所有项目'}
+                  </button>
+                  <p className="text-xs text-gray-500">
+                    💡 将显示所有活跃项目的详细信息
+                  </p>
+                </div>
+              </div>
             </>
           )}
 
@@ -861,6 +949,60 @@ export default function TestContractsPage() {
                 <p><strong>已筹:</strong> {(campaign as any).raisedAmount ? formatEther((campaign as any).raisedAmount) : '0'} MON</p>
                 <p><strong>捐赠人:</strong> {(campaign as any).donorsCount?.toString() || '0'}</p>
                 <p><strong>状态:</strong> {(campaign as any).status === 0 ? '✅ 活跃' : '❌ 已结束'}</p>
+              </div>
+            </div>
+          )}
+
+          {/* 所有项目列表 */}
+          {allCampaigns.length > 0 && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold mb-3">📊 所有活跃项目 ({allCampaigns.length})</h3>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {allCampaigns.map((c, index) => (
+                  <div key={index} className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-semibold text-blue-900">#{c.id?.toString()} - {c.title}</h4>
+                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">活跃</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-gray-600">受益人:</p>
+                        <p className="font-medium text-gray-900 text-xs truncate">{c.beneficiary}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">类别:</p>
+                        <p className="font-medium text-gray-900">{c.category}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">目标金额:</p>
+                        <p className="font-bold text-blue-600">{formatEther(c.targetAmount)} MON</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">已筹金额:</p>
+                        <p className="font-bold text-green-600">{formatEther(c.raisedAmount)} MON</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">保险库余额:</p>
+                        <p className="font-bold text-purple-600">{c.vaultBalance ? formatEther(c.vaultBalance) : '0'} MON</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">捐赠人数:</p>
+                        <p className="font-medium text-gray-900">{c.donorsCount?.toString() || '0'}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-blue-200">
+                      <p className="text-xs text-gray-500">
+                        进度: {((parseFloat(formatEther(c.raisedAmount)) / parseFloat(formatEther(c.targetAmount))) * 100).toFixed(1)}%
+                      </p>
+                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full"
+                          style={{ width: `${Math.min((parseFloat(formatEther(c.raisedAmount)) / parseFloat(formatEther(c.targetAmount))) * 100, 100)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
