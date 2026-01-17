@@ -139,7 +139,7 @@ function generateResponse(intent: string, params: Record<string, string>, isConn
       }
       const amount = params.amount || '50'
       return {
-        content: `太棒了！你想捐赠 **$${amount}** 💚\n\n请选择一个项目进行捐赠，或者告诉我你感兴趣的领域（如医疗、教育、灾害救助），我帮你匹配最适合的项目。\n\n捐赠完成后，你可以随时查看资金的链上流向！`,
+        content: `太棒了！你想支持 **${amount} MON** 💚\n\n请选择一个项目进行支持，或者告诉我你感兴趣的领域（如女性健康、教育、赋能），我帮你匹配最适合的项目。\n\n支持完成后，你可以随时查看资金的链上流向！`,
         action: { type: 'campaigns', data: mockCampaigns.slice(0, 3) }
       }
     

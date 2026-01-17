@@ -207,7 +207,7 @@ export default function BeneficiaryDashboardPage() {
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-[#8A7B73]">提取金额: <span className="text-[#3D3D3D]">$3,000</span></span>
+                    <span className="text-[#8A7B73]">提取金额: <span className="text-[#3D3D3D]">3,000 MON</span></span>
                     <span className="text-[#B8A99A]">2026-01-10</span>
                   </div>
                 </div>
@@ -225,7 +225,7 @@ export default function BeneficiaryDashboardPage() {
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-[#8A7B73]">申请金额: <span className="text-[#3D3D3D]">$2,000</span></span>
+                    <span className="text-[#8A7B73]">申请金额: <span className="text-[#3D3D3D]">2,000 MON</span></span>
                     <span className="text-[#B8A99A]">2026-01-15</span>
                   </div>
                 </div>
@@ -272,7 +272,7 @@ export default function BeneficiaryDashboardPage() {
               <CardContent>
                 <div className="space-y-4">
                   <div className="text-center p-4 bg-[#A8B5A0]/10 rounded-xl border border-[#A8B5A0]/30">
-                    <div className="text-3xl font-bold text-[#8FA584] mb-1">$2,500</div>
+                    <div className="text-3xl font-bold text-[#8FA584] mb-1">2,500 MON</div>
                     <div className="text-sm text-[#8A7B73]">待上传凭证后可提取</div>
                   </div>
                   <div className="text-xs text-[#B8A99A] text-center">

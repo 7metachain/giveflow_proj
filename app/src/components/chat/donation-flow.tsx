@@ -70,7 +70,7 @@ export function DonationFlow({ onClose, onComplete, initialCampaigns }: Donation
     // Initialize donations with default amounts
     const initialDonations = selectedCampaigns.map(campaign => ({
       campaign,
-      amount: 10, // Default $10 per campaign
+      amount: 10, // Default 10 MON per campaign
     }))
     setDonations(initialDonations)
     setStep('amount')

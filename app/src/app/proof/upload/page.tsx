@@ -227,7 +227,7 @@ export default function ProofUploadPage() {
                 {previewUrl && (
                   <div className="mt-6">
                     <label className="block text-sm font-medium text-[#5D4E47] mb-2">
-                      申请提款金额 (USDC)
+                      申请提款金额 (MON)
                     </label>
                     <div className="flex gap-3">
                       <Input

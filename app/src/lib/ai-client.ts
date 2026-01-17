@@ -1,14 +1,16 @@
 /**
- * GiveFlow AI Client
- * 使用 wanjiedata OpenAI 兼容 API
+ * SHE³ AI Client
+ * 使用 wanjiedata OpenAI 兼容 API (DeepSeek V3)
  */
 
-// API 配置 - 使用 DeepSeek V3
+// API 配置
 export const AI_CONFIG = {
   baseUrl: 'https://maas-openapi.wanjiedata.com/api/v1',
-  apiKey: process.env.AI_API_KEY || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3OTcwNjA5NDIsImtleSI6IjVLNzVaOFROQzlGNEhNMzdQOVk3In0.gIpJqwNha8UW3_FhUMGkADNGf-HbkGH5NqhfEWmFFG4',
+  apiKey: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3OTcwNjA5NDIsImtleSI6IjVLNzVaOFROQzlGNEhNMzdQOVk3In0.gIpJqwNha8UW3_FhUMGkADNGf-HbkGH5NqhfEWmFFG4',
   model: 'deepseek-v3-2-251201',
   visionModel: 'deepseek-v3-2-251201',
+  timeout: 30000, // 30秒超时
+  maxRetries: 2,  // 最大重试次数
 }
 
 export interface ChatMessage {
@@ -61,6 +63,69 @@ export interface StreamChunk {
 }
 
 /**
+ * 带超时的 fetch
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeout: number
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+    clearTimeout(timeoutId)
+    return response
+  } catch (error) {
+    clearTimeout(timeoutId)
+    throw error
+  }
+}
+
+/**
+ * 带重试的 API 调用
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxRetries: number = AI_CONFIG.maxRetries,
+  timeout: number = AI_CONFIG.timeout
+): Promise<Response> {
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[AI] Attempt ${attempt + 1}/${maxRetries + 1} - Calling API...`)
+      const response = await fetchWithTimeout(url, options, timeout)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`API Error: ${response.status} - ${errorText}`)
+      }
+      
+      console.log(`[AI] Success on attempt ${attempt + 1}`)
+      return response
+    } catch (error) {
+      lastError = error as Error
+      console.error(`[AI] Attempt ${attempt + 1} failed:`, lastError.message)
+      
+      if (attempt < maxRetries) {
+        // 等待一段时间后重试 (指数退避)
+        const delay = Math.min(1000 * Math.pow(2, attempt), 5000)
+        console.log(`[AI] Retrying in ${delay}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+  }
+
+  throw lastError || new Error('All retry attempts failed')
+}
+
+/**
  * 非流式聊天请求
  */
 export async function chatCompletion(
@@ -71,25 +136,30 @@ export async function chatCompletion(
     temperature?: number
   }
 ): Promise<ChatCompletionResponse> {
-  const response = await fetch(`${AI_CONFIG.baseUrl}/chat/completions`, {
+  const url = `${AI_CONFIG.baseUrl}/chat/completions`
+  
+  const requestBody = {
+    model: options?.model || AI_CONFIG.model,
+    messages,
+    stream: false,
+    max_tokens: options?.maxTokens || 1000,
+    temperature: options?.temperature || 0.7,
+  }
+
+  console.log('[AI] Request:', {
+    url,
+    model: requestBody.model,
+    messageCount: messages.length,
+  })
+
+  const response = await fetchWithRetry(url, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${AI_CONFIG.apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: options?.model || AI_CONFIG.model,
-      messages,
-      stream: false,
-      max_tokens: options?.maxTokens || 1000,
-      temperature: options?.temperature || 0.7,
-    }),
+    body: JSON.stringify(requestBody),
   })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`AI API Error: ${response.status} - ${errorText}`)
-  }
 
   return response.json()
 }
@@ -105,7 +175,9 @@ export async function chatCompletionStream(
     temperature?: number
   }
 ): Promise<ReadableStream<Uint8Array>> {
-  const response = await fetch(`${AI_CONFIG.baseUrl}/chat/completions`, {
+  const url = `${AI_CONFIG.baseUrl}/chat/completions`
+
+  const response = await fetchWithRetry(url, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${AI_CONFIG.apiKey}`,
@@ -119,11 +191,6 @@ export async function chatCompletionStream(
       temperature: options?.temperature || 0.7,
     }),
   })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`AI API Error: ${response.status} - ${errorText}`)
-  }
 
   return response.body!
 }
@@ -206,7 +273,7 @@ export async function visionCompletion(
 }
 
 /**
- * 上传文件获取 URL (用于图生视频等)
+ * 上传文件获取 URL
  */
 export async function uploadFile(file: File): Promise<{ url: string; fileName: string }> {
   const formData = new FormData()

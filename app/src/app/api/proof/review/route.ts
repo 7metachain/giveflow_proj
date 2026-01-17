@@ -37,7 +37,7 @@ function buildReviewPrompt(amount: string, purpose: string): string {
 3. 日期是否在合理范围内
 4. 用途是否符合公益支出
 
-用户申请的金额：$${amount}
+用户申请的金额：${amount} MON
 项目用途说明：${purpose}
 
 请严格以 JSON 格式回复，不要包含其他内容：

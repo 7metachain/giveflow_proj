@@ -2,6 +2,7 @@
 
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,12 +17,12 @@ import {
   Shield,
   FileCheck,
   ArrowLeft,
-  AlertCircle,
   Loader2,
   Wallet,
   TrendingUp,
   Calendar,
   Brain,
+  Sparkles,
 } from 'lucide-react'
 import {
   getCampaignById,
@@ -30,6 +31,7 @@ import {
   formatDate,
   shortenAddress,
   getCategoryStyle,
+  getCategoryImage,
 } from '@/lib/mock-data'
 import { useAccount } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
@@ -48,9 +50,11 @@ export default function CampaignDetailPage() {
     return (
       <div className="min-h-screen flex items-center justify-center hero-pattern">
         <div className="text-center">
-          <div className="text-6xl mb-4">🌸</div>
-          <h2 className="text-2xl font-bold text-[#3D3D3D] mb-2">项目未找到</h2>
-          <p className="text-[#8A7B73] mb-4">该项目可能已被移除或不存在</p>
+          <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-[#F3EDE6] flex items-center justify-center">
+            <Heart className="w-12 h-12 text-[#D4785C]/40" />
+          </div>
+          <h2 className="text-2xl font-bold text-[#2D2420] mb-2">项目未找到</h2>
+          <p className="text-[#8B7B6E] mb-6">该项目可能已被移除或不存在</p>
           <Link href="/campaigns">
             <Button className="btn-warm rounded-full">
               返回项目列表
@@ -65,6 +69,7 @@ export default function CampaignDetailPage() {
     (campaign.raisedAmount / campaign.targetAmount) * 100
   )
   const style = getCategoryStyle(campaign.category)
+  const imageClass = getCategoryImage(campaign.category)
 
   const handleDonate = async () => {
     if (!donateAmount || parseFloat(donateAmount) <= 0) return
@@ -76,65 +81,77 @@ export default function CampaignDetailPage() {
   }
 
   return (
-    <div className="min-h-screen py-10 hero-pattern">
-      <div className="container mx-auto px-4">
+    <div className="min-h-screen">
+      {/* Hero Image */}
+      <div className={`relative h-72 md:h-96 ${imageClass}`}>
+        <Image
+          src={campaign.imageUrl}
+          alt={campaign.title}
+          fill
+          className="object-cover"
+          priority
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+        
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-[#8A7B73] mb-6">
-          <Link href="/campaigns" className="hover:text-[#C4866B] flex items-center gap-1">
-            <ArrowLeft className="w-4 h-4" />
-            探索项目
-          </Link>
-          <span>/</span>
-          <span className="text-[#5D4E47]">{campaign.title}</span>
+        <div className="absolute top-6 left-0 right-0">
+          <div className="container mx-auto px-4">
+            <Link href="/campaigns" className="inline-flex items-center gap-2 text-white/80 hover:text-white transition-colors bg-black/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm">
+              <ArrowLeft className="w-4 h-4" />
+              返回项目列表
+            </Link>
+          </div>
         </div>
+        
+        {/* Title overlay */}
+        <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
+          <div className="container mx-auto">
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <Badge className="bg-white/90 text-[#2D2420] border-0">
+                <CheckCircle className="w-3 h-3 mr-1 text-[#7BA089]" />
+                已验证项目
+              </Badge>
+              <Badge className={`${style.bg} ${style.text} ${style.border} bg-white/90`}>
+                {campaign.category}
+              </Badge>
+            </div>
+            <h1 className="text-2xl md:text-4xl font-bold text-white mb-2">
+              {campaign.title}
+            </h1>
+            <p className="text-white/80 text-sm md:text-base max-w-2xl">
+              {campaign.description}
+            </p>
+          </div>
+        </div>
+      </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid lg:grid-cols-3 gap-8 -mt-16 relative z-10">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Header Card */}
-            <Card className="warm-card card-shadow overflow-hidden">
-              {/* Image placeholder */}
-              <div className="h-64 bg-gradient-to-br from-[#F5F2ED] to-[#E8E2D9] flex items-center justify-center relative">
-                <span className="text-8xl opacity-60">🌸</span>
-                <Badge className="absolute top-4 left-4 badge-terracotta">
-                  <CheckCircle className="w-3 h-3 mr-1" />
-                  已验证项目
-                </Badge>
-              </div>
-
+            {/* Info Card */}
+            <Card className="warm-card card-shadow">
               <CardContent className="p-6">
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                  <Badge className={`${style.bg} ${style.text} ${style.border}`}>
-                    {campaign.category}
-                  </Badge>
-                  <Badge className="badge-sage">
-                    <Shield className="w-3 h-3 mr-1" />
-                    链上存证
-                  </Badge>
-                </div>
-
-                <h1 className="text-2xl md:text-3xl font-bold text-[#3D3D3D] mb-4">
-                  {campaign.title}
-                </h1>
-
-                <p className="text-[#8A7B73] leading-relaxed mb-6">
-                  {campaign.description}
-                </p>
-
                 {/* Beneficiary Info */}
-                <div className="flex items-center gap-3 p-4 bg-[#FAF7F2] rounded-xl border border-[#E8E2D9]">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#C4866B] to-[#D4A59A] flex items-center justify-center text-white font-bold text-lg">
+                <div className="flex items-center gap-4 p-4 bg-[#FBF8F4] rounded-xl border border-[#E5DDD4]">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#D4785C] to-[#E8B4A0] flex items-center justify-center text-white font-bold text-xl shadow-lg">
                     {campaign.beneficiaryName[0]}
                   </div>
-                  <div>
-                    <div className="text-[#3D3D3D] font-medium">
+                  <div className="flex-1">
+                    <div className="text-[#2D2420] font-semibold text-lg">
                       {campaign.beneficiaryName}
                     </div>
-                    <div className="text-sm text-[#B8A99A] flex items-center gap-1">
-                      <Wallet className="w-3 h-3" />
+                    <div className="text-sm text-[#8B7B6E] flex items-center gap-2">
+                      <Wallet className="w-4 h-4" />
                       {shortenAddress(campaign.beneficiary)}
-                      <ExternalLink className="w-3 h-3 ml-1 hover:text-[#C4866B] cursor-pointer" />
+                      <ExternalLink className="w-3.5 h-3.5 hover:text-[#D4785C] cursor-pointer" />
                     </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Badge className="badge-sage">
+                      <Shield className="w-3 h-3 mr-1" />
+                      链上存证
+                    </Badge>
                   </div>
                 </div>
               </CardContent>
@@ -144,10 +161,19 @@ export default function CampaignDetailPage() {
             <Card className="warm-card card-shadow">
               <Tabs defaultValue="milestones">
                 <CardHeader className="pb-0">
-                  <TabsList className="bg-[#F5F2ED] border border-[#E8E2D9]">
-                    <TabsTrigger value="milestones" className="data-[state=active]:bg-white data-[state=active]:text-[#C4866B]">里程碑</TabsTrigger>
-                    <TabsTrigger value="proofs" className="data-[state=active]:bg-white data-[state=active]:text-[#C4866B]">凭证记录</TabsTrigger>
-                    <TabsTrigger value="donors" className="data-[state=active]:bg-white data-[state=active]:text-[#C4866B]">支持者</TabsTrigger>
+                  <TabsList className="bg-[#F3EDE6] border border-[#E5DDD4] p-1 rounded-xl">
+                    <TabsTrigger value="milestones" className="data-[state=active]:bg-white data-[state=active]:text-[#D4785C] data-[state=active]:shadow-sm rounded-lg">
+                      <TrendingUp className="w-4 h-4 mr-1.5" />
+                      里程碑
+                    </TabsTrigger>
+                    <TabsTrigger value="proofs" className="data-[state=active]:bg-white data-[state=active]:text-[#D4785C] data-[state=active]:shadow-sm rounded-lg">
+                      <FileCheck className="w-4 h-4 mr-1.5" />
+                      凭证记录
+                    </TabsTrigger>
+                    <TabsTrigger value="donors" className="data-[state=active]:bg-white data-[state=active]:text-[#D4785C] data-[state=active]:shadow-sm rounded-lg">
+                      <Users className="w-4 h-4 mr-1.5" />
+                      支持者
+                    </TabsTrigger>
                   </TabsList>
                 </CardHeader>
 
@@ -157,34 +183,34 @@ export default function CampaignDetailPage() {
                     {campaign.milestones.map((milestone, index) => (
                       <div
                         key={milestone.id}
-                        className={`p-4 rounded-xl border ${
+                        className={`p-5 rounded-xl border transition-all ${
                           milestone.status === 'completed'
-                            ? 'border-[#A8B5A0]/30 bg-[#A8B5A0]/5'
+                            ? 'border-[#7BA089]/30 bg-gradient-to-r from-[#7BA089]/5 to-transparent'
                             : milestone.status === 'in_progress'
-                            ? 'border-[#C4866B]/30 bg-[#C4866B]/5'
-                            : 'border-[#E8E2D9] bg-[#FAF7F2]'
+                            ? 'border-[#D4785C]/30 bg-gradient-to-r from-[#D4785C]/5 to-transparent'
+                            : 'border-[#E5DDD4] bg-[#FBF8F4]'
                         }`}
                       >
                         <div className="flex items-start gap-4">
                           <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shadow-sm ${
                               milestone.status === 'completed'
-                                ? 'bg-[#A8B5A0] text-white'
+                                ? 'bg-[#7BA089] text-white'
                                 : milestone.status === 'in_progress'
-                                ? 'bg-[#C4866B] text-white'
-                                : 'bg-[#E8E2D9] text-[#8A7B73]'
+                                ? 'bg-[#D4785C] text-white'
+                                : 'bg-[#E5DDD4] text-[#8B7B6E]'
                             }`}
                           >
                             {milestone.status === 'completed' ? (
-                              <CheckCircle className="w-4 h-4" />
+                              <CheckCircle className="w-5 h-5" />
                             ) : (
                               index + 1
                             )}
                           </div>
 
                           <div className="flex-1">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-semibold text-[#3D3D3D]">
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-semibold text-[#2D2420] text-lg">
                                 {milestone.title}
                               </h4>
                               <Badge
@@ -197,33 +223,33 @@ export default function CampaignDetailPage() {
                                 }
                               >
                                 {milestone.status === 'completed'
-                                  ? '已完成'
+                                  ? '✓ 已完成'
                                   : milestone.status === 'in_progress'
                                   ? '进行中'
                                   : '待开始'}
                               </Badge>
                             </div>
 
-                            <div className="flex items-center justify-between text-sm mb-2">
-                              <span className="text-[#8A7B73]">
-                                目标: {formatAmount(milestone.targetAmount)}
+                            <div className="flex items-center justify-between text-sm mb-3">
+                              <span className="text-[#8B7B6E]">
+                                目标: <span className="font-medium text-[#2D2420]">{formatAmount(milestone.targetAmount)}</span>
                               </span>
-                              <span className="text-[#8FA584]">
+                              <span className="text-[#7BA089] font-medium">
                                 已释放: {formatAmount(milestone.releasedAmount)}
                               </span>
                             </div>
 
-                            <div className="h-2 bg-[#E8E2D9] rounded-full overflow-hidden">
+                            <div className="h-2.5 bg-[#E5DDD4] rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-[#A8B5A0] to-[#8FA584] transition-all"
+                                className="h-full progress-sage transition-all duration-500"
                                 style={{ width: `${(milestone.releasedAmount / milestone.targetAmount) * 100}%` }}
                               />
                             </div>
 
                             {milestone.proofRequired && (
-                              <div className="flex items-center gap-1 mt-2 text-xs text-[#B8A99A]">
-                                <FileCheck className="w-3 h-3" />
-                                需要凭证审核
+                              <div className="flex items-center gap-1.5 mt-3 text-xs text-[#8B7B6E]">
+                                <FileCheck className="w-3.5 h-3.5" />
+                                需要凭证审核才能释放资金
                               </div>
                             )}
                           </div>
@@ -238,15 +264,15 @@ export default function CampaignDetailPage() {
                       campaign.proofs.map((proof) => (
                         <div
                           key={proof.id}
-                          className="p-4 rounded-xl border border-[#E8E2D9] bg-[#FAF7F2]"
+                          className="p-5 rounded-xl border border-[#E5DDD4] bg-[#FBF8F4]"
                         >
-                          <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-start justify-between mb-4">
                             <div>
-                              <h4 className="font-medium text-[#3D3D3D] mb-1">
+                              <h4 className="font-medium text-[#2D2420] mb-1 text-lg">
                                 {proof.description}
                               </h4>
-                              <div className="text-sm text-[#8A7B73]">
-                                申请金额: {formatAmount(proof.amount)}
+                              <div className="text-sm text-[#8B7B6E]">
+                                申请金额: <span className="font-semibold text-[#D4785C]">{formatAmount(proof.amount)}</span>
                               </div>
                             </div>
                             <Badge
@@ -254,10 +280,11 @@ export default function CampaignDetailPage() {
                                 proof.status === 'ai_approved'
                                   ? 'badge-sage'
                                   : proof.status === 'ai_rejected'
-                                  ? 'bg-[#C97065]/10 text-[#C97065] border-[#C97065]/20'
+                                  ? 'bg-[#D97065]/10 text-[#D97065] border-[#D97065]/20'
                                   : 'badge-terracotta'
                               }
                             >
+                              <Brain className="w-3 h-3 mr-1" />
                               {proof.status === 'ai_approved'
                                 ? 'AI 审核通过'
                                 : proof.status === 'ai_rejected'
@@ -267,45 +294,45 @@ export default function CampaignDetailPage() {
                           </div>
 
                           {proof.aiReview && (
-                            <div className="bg-white rounded-xl p-4 border border-[#E8E2D9] space-y-3">
+                            <div className="bg-white rounded-xl p-4 border border-[#E5DDD4] space-y-3">
                               <div className="flex items-center gap-2">
-                                <Brain className="w-4 h-4 text-[#C4866B]" />
-                                <span className="text-sm font-medium text-[#5D4E47]">
-                                  AI 审核结果
+                                <Sparkles className="w-4 h-4 text-[#D4785C]" />
+                                <span className="text-sm font-medium text-[#2D2420]">
+                                  AI 审核详情
                                 </span>
-                                <span className="text-xs text-[#8A7B73]">
+                                <Badge variant="outline" className="text-xs ml-auto">
                                   置信度: {(proof.aiReview.confidence * 100).toFixed(0)}%
-                                </span>
+                                </Badge>
                               </div>
 
                               <div className="grid grid-cols-2 gap-3 text-sm">
-                                <div>
-                                  <span className="text-[#B8A99A]">识别金额:</span>
-                                  <span className="ml-2 text-[#3D3D3D]">
+                                <div className="p-2 bg-[#FBF8F4] rounded-lg">
+                                  <span className="text-[#8B7B6E] text-xs">识别金额</span>
+                                  <div className="font-medium text-[#2D2420]">
                                     {formatAmount(proof.aiReview.extracted.amount)}
-                                  </span>
+                                  </div>
                                 </div>
-                                <div>
-                                  <span className="text-[#B8A99A]">日期:</span>
-                                  <span className="ml-2 text-[#3D3D3D]">
+                                <div className="p-2 bg-[#FBF8F4] rounded-lg">
+                                  <span className="text-[#8B7B6E] text-xs">日期</span>
+                                  <div className="font-medium text-[#2D2420]">
                                     {proof.aiReview.extracted.date}
-                                  </span>
+                                  </div>
                                 </div>
-                                <div>
-                                  <span className="text-[#B8A99A]">收款方:</span>
-                                  <span className="ml-2 text-[#3D3D3D]">
+                                <div className="p-2 bg-[#FBF8F4] rounded-lg">
+                                  <span className="text-[#8B7B6E] text-xs">收款方</span>
+                                  <div className="font-medium text-[#2D2420]">
                                     {proof.aiReview.extracted.recipient}
-                                  </span>
+                                  </div>
                                 </div>
-                                <div>
-                                  <span className="text-[#B8A99A]">用途:</span>
-                                  <span className="ml-2 text-[#3D3D3D]">
+                                <div className="p-2 bg-[#FBF8F4] rounded-lg">
+                                  <span className="text-[#8B7B6E] text-xs">用途</span>
+                                  <div className="font-medium text-[#2D2420]">
                                     {proof.aiReview.extracted.purpose}
-                                  </span>
+                                  </div>
                                 </div>
                               </div>
 
-                              <div className="flex flex-wrap gap-2 pt-2 border-t border-[#E8E2D9]">
+                              <div className="flex flex-wrap gap-2 pt-3 border-t border-[#E5DDD4]">
                                 {proof.aiReview.checks.amountMatch && (
                                   <Badge className="badge-sage text-xs">
                                     <CheckCircle className="w-3 h-3 mr-1" />
@@ -326,29 +353,31 @@ export default function CampaignDetailPage() {
                                 )}
                               </div>
 
-                              <p className="text-xs text-[#8A7B73] italic">
-                                {proof.aiReview.reason}
+                              <p className="text-sm text-[#6B5B4F] italic bg-[#FBF8F4] p-3 rounded-lg">
+                                "{proof.aiReview.reason}"
                               </p>
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between mt-3 text-xs text-[#B8A99A]">
+                          <div className="flex items-center justify-between mt-4 text-xs text-[#8B7B6E]">
                             <span className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
                               提交于 {formatDate(proof.submittedAt)}
                             </span>
                             {proof.txHash && (
-                              <span className="flex items-center gap-1 hover:text-[#C4866B] cursor-pointer">
-                                查看交易 <ExternalLink className="w-3 h-3" />
+                              <span className="flex items-center gap-1 hover:text-[#D4785C] cursor-pointer">
+                                查看链上记录 <ExternalLink className="w-3 h-3" />
                               </span>
                             )}
                           </div>
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-10">
-                        <FileCheck className="w-12 h-12 text-[#D4C8BC] mx-auto mb-3" />
-                        <p className="text-[#8A7B73]">暂无凭证记录</p>
+                      <div className="text-center py-16">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#F3EDE6] flex items-center justify-center">
+                          <FileCheck className="w-8 h-8 text-[#D4785C]/40" />
+                        </div>
+                        <p className="text-[#8B7B6E]">暂无凭证记录</p>
                       </div>
                     )}
                   </TabsContent>
@@ -359,26 +388,26 @@ export default function CampaignDetailPage() {
                       donations.map((donation, index) => (
                         <div
                           key={index}
-                          className="flex items-center justify-between p-4 rounded-xl border border-[#E8E2D9] bg-[#FAF7F2]"
+                          className="flex items-center justify-between p-4 rounded-xl border border-[#E5DDD4] bg-[#FBF8F4] hover:border-[#D4785C]/30 transition-colors"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#C4866B] to-[#D4A59A] flex items-center justify-center text-white text-sm">
-                              <Heart className="w-4 h-4" fill="white" />
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#D4785C] to-[#E8B4A0] flex items-center justify-center text-white shadow-md">
+                              <Heart className="w-5 h-5" fill="white" />
                             </div>
                             <div>
-                              <div className="text-[#3D3D3D] font-medium">
+                              <div className="text-[#2D2420] font-medium">
                                 {shortenAddress(donation.donor)}
                               </div>
-                              <div className="text-xs text-[#B8A99A]">
+                              <div className="text-xs text-[#8B7B6E]">
                                 {formatDate(donation.timestamp)}
                               </div>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-[#C4866B] font-semibold">
+                            <div className="text-[#D4785C] font-bold text-lg">
                               {formatAmount(donation.amount)}
                             </div>
-                            <div className="text-xs text-[#B8A99A] flex items-center gap-1 justify-end">
+                            <div className="text-xs text-[#8B7B6E] flex items-center gap-1 justify-end hover:text-[#D4785C] cursor-pointer">
                               <ExternalLink className="w-3 h-3" />
                               {shortenAddress(donation.txHash)}
                             </div>
@@ -386,9 +415,15 @@ export default function CampaignDetailPage() {
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-10">
-                        <Users className="w-12 h-12 text-[#D4C8BC] mx-auto mb-3" />
-                        <p className="text-[#8A7B73]">成为第一个支持者</p>
+                      <div className="text-center py-16">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#F3EDE6] flex items-center justify-center">
+                          <Users className="w-8 h-8 text-[#7BA089]/40" />
+                        </div>
+                        <p className="text-[#8B7B6E] mb-4">成为第一个支持者</p>
+                        <Button className="btn-warm rounded-full">
+                          <Heart className="w-4 h-4 mr-2" fill="white" />
+                          立即支持
+                        </Button>
                       </div>
                     )}
                   </TabsContent>
@@ -400,47 +435,35 @@ export default function CampaignDetailPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Donate Card */}
-            <Card className="warm-card card-shadow sticky top-24">
+            <Card className="warm-card card-shadow sticky top-24 overflow-hidden">
+              <div className="h-2 progress-warm" style={{ width: `${progressPercent}%` }} />
               <CardContent className="p-6">
                 <div className="text-center mb-6">
-                  <div className="text-3xl font-bold text-[#3D3D3D] mb-1">
+                  <div className="text-4xl font-bold text-[#2D2420] mb-1">
                     {formatAmount(campaign.raisedAmount)}
                   </div>
-                  <div className="text-sm text-[#8A7B73]">
-                    目标 {formatAmount(campaign.targetAmount)}
-                  </div>
-                </div>
-
-                <div className="space-y-2 mb-6">
-                  <div className="h-3 bg-[#F0EBE3] rounded-full overflow-hidden">
-                    <div 
-                      className="h-full progress-warm"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[#C4866B] font-semibold">{progressPercent}%</span>
-                    <span className="text-[#8A7B73]">已筹款</span>
+                  <div className="text-sm text-[#8B7B6E]">
+                    目标 {formatAmount(campaign.targetAmount)} · <span className="text-[#D4785C] font-semibold">{progressPercent}%</span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="text-center p-3 bg-[#FAF7F2] rounded-xl">
-                    <div className="text-xl font-bold text-[#3D3D3D]">
+                  <div className="text-center p-4 bg-[#FBF8F4] rounded-xl">
+                    <div className="text-2xl font-bold text-[#2D2420]">
                       {campaign.donorsCount}
                     </div>
-                    <div className="text-xs text-[#B8A99A] flex items-center justify-center gap-1">
-                      <Users className="w-3 h-3" />
+                    <div className="text-xs text-[#8B7B6E] flex items-center justify-center gap-1 mt-1">
+                      <Users className="w-3.5 h-3.5" />
                       支持者
                     </div>
                   </div>
-                  <div className="text-center p-3 bg-[#FAF7F2] rounded-xl">
-                    <div className="text-xl font-bold text-[#8FA584]">
+                  <div className="text-center p-4 bg-[#FBF8F4] rounded-xl">
+                    <div className="text-2xl font-bold text-[#7BA089]">
                       {campaign.milestones.filter((m) => m.status === 'completed').length}/
                       {campaign.milestones.length}
                     </div>
-                    <div className="text-xs text-[#B8A99A] flex items-center justify-center gap-1">
-                      <TrendingUp className="w-3 h-3" />
+                    <div className="text-xs text-[#8B7B6E] flex items-center justify-center gap-1 mt-1">
+                      <TrendingUp className="w-3.5 h-3.5" />
                       里程碑
                     </div>
                   </div>
@@ -449,28 +472,26 @@ export default function CampaignDetailPage() {
                 {isConnected ? (
                   <>
                     <div className="mb-4">
-                      <label className="text-sm text-[#5D4E47] mb-2 block">
-                        支持金额 (USDC)
+                      <label className="text-sm text-[#5D4E47] mb-2 block font-medium">
+                        支持金额 (MON)
                       </label>
-                      <div className="flex gap-2">
-                        <Input
-                          type="number"
-                          placeholder="0.00"
-                          value={donateAmount}
-                          onChange={(e) => setDonateAmount(e.target.value)}
-                          className="bg-[#FAF7F2] border-[#E8E2D9] text-[#3D3D3D] focus:border-[#C4866B]"
-                        />
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        {[10, 50, 100].map((amount) => (
+                      <Input
+                        type="number"
+                        placeholder="输入金额"
+                        value={donateAmount}
+                        onChange={(e) => setDonateAmount(e.target.value)}
+                        className="bg-[#FBF8F4] border-[#E5DDD4] text-[#2D2420] focus:border-[#D4785C] h-12 text-lg"
+                      />
+                      <div className="flex gap-2 mt-3">
+                        {[10, 50, 100, 500].map((amount) => (
                           <Button
                             key={amount}
                             variant="outline"
                             size="sm"
                             onClick={() => setDonateAmount(amount.toString())}
-                            className="flex-1 border-[#E8E2D9] text-[#5D4E47] hover:bg-[#F5F2ED] hover:border-[#C4866B]"
+                            className={`flex-1 border-[#E5DDD4] hover:border-[#D4785C] hover:bg-[#D4785C]/5 rounded-full ${donateAmount === amount.toString() ? 'border-[#D4785C] bg-[#D4785C]/5 text-[#D4785C]' : 'text-[#5D4E47]'}`}
                           >
-                            ${amount}
+                            {amount} MON
                           </Button>
                         ))}
                       </div>
@@ -479,33 +500,33 @@ export default function CampaignDetailPage() {
                     <Button
                       onClick={handleDonate}
                       disabled={!donateAmount || isLoading}
-                      className="w-full btn-warm h-12 rounded-full text-base font-semibold pulse-warm"
+                      className="w-full btn-warm h-14 rounded-full text-lg font-semibold"
                     >
                       {isLoading ? (
                         <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                           处理中...
                         </>
                       ) : (
                         <>
-                          <Heart className="w-4 h-4 mr-2" fill="white" />
-                          立即支持 🌸
+                          <Heart className="w-5 h-5 mr-2" fill="white" />
+                          立即支持
                         </>
                       )}
                     </Button>
                   </>
                 ) : (
                   <div className="text-center">
-                    <p className="text-sm text-[#8A7B73] mb-4">
+                    <p className="text-sm text-[#8B7B6E] mb-4">
                       连接钱包后即可支持此项目
                     </p>
                     <ConnectButton.Custom>
                       {({ openConnectModal }) => (
                         <Button
                           onClick={openConnectModal}
-                          className="w-full btn-warm h-12 rounded-full text-base font-semibold"
+                          className="w-full btn-warm h-14 rounded-full text-lg font-semibold"
                         >
-                          <Wallet className="w-4 h-4 mr-2" />
+                          <Wallet className="w-5 h-5 mr-2" />
                           连接钱包
                         </Button>
                       )}
@@ -513,9 +534,9 @@ export default function CampaignDetailPage() {
                   </div>
                 )}
 
-                <div className="mt-4 pt-4 border-t border-[#E8E2D9]">
-                  <div className="flex items-center gap-1 text-xs text-[#B8A99A]">
-                    <Calendar className="w-3 h-3" />
+                <div className="mt-4 pt-4 border-t border-[#E5DDD4]">
+                  <div className="flex items-center gap-2 text-sm text-[#8B7B6E]">
+                    <Calendar className="w-4 h-4" />
                     截止日期: {formatDate(campaign.deadline)}
                   </div>
                 </div>
@@ -524,21 +545,21 @@ export default function CampaignDetailPage() {
 
             {/* Trust Card */}
             <Card className="warm-card card-shadow">
-              <CardContent className="p-4">
-                <h4 className="font-semibold text-[#3D3D3D] mb-3 flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-[#8FA584]" />
-                  为什么信任我们
+              <CardContent className="p-5">
+                <h4 className="font-semibold text-[#2D2420] mb-4 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-[#7BA089]" />
+                  为什么值得信任
                 </h4>
-                <div className="space-y-2 text-sm">
+                <div className="space-y-3">
                   {[
-                    '所有支持记录上链存证',
-                    'AI 智能审核支出凭证',
-                    '里程碑式资金释放机制',
-                    '100% 透明可追溯',
+                    { icon: '🔗', text: '所有支持记录链上存证' },
+                    { icon: '🤖', text: 'AI 智能审核支出凭证' },
+                    { icon: '📊', text: '里程碑式资金释放' },
+                    { icon: '👁️', text: '100% 透明可追溯' },
                   ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-2 text-[#8A7B73]">
-                      <CheckCircle className="w-4 h-4 text-[#A8B5A0]" />
-                      {item}
+                    <div key={i} className="flex items-center gap-3 text-sm text-[#6B5B4F] p-2 bg-[#FBF8F4] rounded-lg">
+                      <span className="text-lg">{item.icon}</span>
+                      {item.text}
                     </div>
                   ))}
                 </div>

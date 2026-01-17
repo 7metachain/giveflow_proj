@@ -180,7 +180,7 @@ interface BatchSelection {
 export function GlobalChatbot() {
   const { role } = useUser()
   const { isConnected } = useAccount()
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(true) // 默认打开
   const [isMinimized, setIsMinimized] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -225,7 +225,7 @@ export function GlobalChatbot() {
     const successMessage: Message = {
       id: Date.now().toString(),
       role: 'assistant',
-      content: `🎉 批量支持成功！\n\n你已向 ${selectedItems.length} 个女性公益项目捐赠共计 **$${totalAmount}**\n\n${campaigns.map((c, i) => `✅ ${c.title} - $${selectedItems[i].amount}`).join('\n')}\n\n所有交易已记录在 Monad 区块链上 ⛓️\n感谢你为女性公益贡献力量！🌸`,
+      content: `🎉 批量支持成功！\n\n你已向 ${selectedItems.length} 个女性公益项目支持共计 **${totalAmount} MON**\n\n${campaigns.map((c, i) => `✅ ${c.title} - ${selectedItems[i].amount} MON`).join('\n')}\n\n所有交易已记录在 Monad 区块链上 ⛓️\n感谢你为女性公益贡献力量！🌸`,
       timestamp: new Date(),
     }
     
@@ -296,15 +296,23 @@ export function GlobalChatbot() {
 
   return (
     <>
-      {/* Chat Button */}
+      {/* Chat Button - 更醒目的设计 */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-gradient-to-br from-[#C4866B] to-[#D4A59A] shadow-lg flex items-center justify-center transition-all hover:scale-110 hover:shadow-xl"
-          style={{ boxShadow: '0 4px 20px rgba(196, 134, 107, 0.4)' }}
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-gradient-to-r from-[#D4785C] to-[#E8B4A0] text-white pl-4 pr-5 py-3 rounded-full shadow-xl transition-all hover:scale-105 hover:shadow-2xl group"
+          style={{ 
+            boxShadow: '0 8px 32px rgba(212, 120, 92, 0.4)',
+            animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+          }}
         >
-          <MessageCircle className="w-6 h-6 text-white" />
-          <span className="absolute top-0 right-0 w-3 h-3 bg-[#A8B5A0] rounded-full animate-pulse" />
+          <div className="relative">
+            <MessageCircle className="w-6 h-6" />
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#7BA089] rounded-full animate-ping" />
+            <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#7BA089] rounded-full" />
+          </div>
+          <span className="font-semibold text-base">AI 助手</span>
+          <Sparkles className="w-4 h-4 opacity-80 group-hover:animate-spin" />
         </button>
       )}
 
@@ -413,7 +421,7 @@ export function GlobalChatbot() {
                                                 <button onClick={() => updateBatchAmount(campaign.id, (selection?.amount || 10) - 5)} className="w-5 h-5 rounded bg-[#E8E2D9] hover:bg-[#D4C8BC] flex items-center justify-center">
                                                   <Minus className="w-3 h-3 text-[#5D4E47]" />
                                                 </button>
-                                                <span className="text-xs text-[#C4866B] font-medium w-10 text-center">${selection?.amount || 10}</span>
+                                                <span className="text-xs text-[#C4866B] font-medium w-12 text-center">{selection?.amount || 10}</span>
                                                 <button onClick={() => updateBatchAmount(campaign.id, (selection?.amount || 10) + 5)} className="w-5 h-5 rounded bg-[#E8E2D9] hover:bg-[#D4C8BC] flex items-center justify-center">
                                                   <Plus className="w-3 h-3 text-[#5D4E47]" />
                                                 </button>
@@ -430,7 +438,7 @@ export function GlobalChatbot() {
                                   <div className="p-3 bg-[#C4866B]/10 rounded-xl border border-[#C4866B]/30">
                                     <div className="flex items-center justify-between mb-2">
                                       <span className="text-xs text-[#8A7B73]">已选 {selectedCount} 个项目</span>
-                                      <span className="text-sm font-bold text-[#C4866B]">总计 ${totalAmount}</span>
+                                      <span className="text-sm font-bold text-[#C4866B]">总计 {totalAmount} MON</span>
                                     </div>
                                     <Button onClick={() => setShowBatchConfirm(true)} className="w-full btn-warm text-sm h-9 rounded-full">
                                       <Heart className="w-3 h-3 mr-1" fill="white" />确认支持
@@ -449,7 +457,7 @@ export function GlobalChatbot() {
                                     return (
                                       <div key={s.campaignId} className="flex justify-between text-xs">
                                         <span className="text-[#8A7B73] truncate max-w-[60%]">{campaign?.title}</span>
-                                        <span className="text-[#3D3D3D]">${s.amount}</span>
+                                        <span className="text-[#3D3D3D]">{s.amount} MON</span>
                                       </div>
                                     )
                                   })}
@@ -457,7 +465,7 @@ export function GlobalChatbot() {
                                 <div className="border-t border-[#E8E2D9] pt-2">
                                   <div className="flex justify-between text-sm font-semibold">
                                     <span className="text-[#3D3D3D]">总计</span>
-                                    <span className="text-[#C4866B]">${totalAmount}</span>
+                                    <span className="text-[#C4866B]">{totalAmount} MON</span>
                                   </div>
                                 </div>
                                 <p className="text-[10px] text-[#B8A99A] text-center">利用 Monad 并行执行，{selectedCount} 笔交易将同时完成</p>

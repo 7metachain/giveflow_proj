@@ -81,7 +81,7 @@ export const mockCampaigns: Campaign[] = [
     raisedAmount: 11250,
     donorsCount: 328,
     category: '女性健康',
-    imageUrl: '/images/health-screening.jpg',
+    imageUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=600&h=400&fit=crop',
     milestones: [
       {
         id: 'm1',
@@ -154,7 +154,7 @@ export const mockCampaigns: Campaign[] = [
     raisedAmount: 16000,
     donorsCount: 456,
     category: '女性教育',
-    imageUrl: '/images/coding-camp.jpg',
+    imageUrl: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=600&h=400&fit=crop',
     milestones: [
       {
         id: 'm1',
@@ -196,7 +196,7 @@ export const mockCampaigns: Campaign[] = [
     raisedAmount: 8400,
     donorsCount: 267,
     category: '女性赋能',
-    imageUrl: '/images/skill-training.jpg',
+    imageUrl: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=600&h=400&fit=crop',
     milestones: [
       {
         id: 'm1',
@@ -238,7 +238,7 @@ export const mockCampaigns: Campaign[] = [
     raisedAmount: 17500,
     donorsCount: 389,
     category: '心理健康',
-    imageUrl: '/images/mental-health.jpg',
+    imageUrl: 'https://images.unsplash.com/photo-1544027993-37dbfe43562a?w=600&h=400&fit=crop',
     milestones: [
       {
         id: 'm1',
@@ -280,7 +280,7 @@ export const mockCampaigns: Campaign[] = [
     raisedAmount: 10800,
     donorsCount: 234,
     category: '女性教育',
-    imageUrl: '/images/teacher-training.jpg',
+    imageUrl: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=600&h=400&fit=crop',
     milestones: [
       {
         id: 'm1',
@@ -366,12 +366,8 @@ export function getDonationsByDonor(donorAddress: string): Donation[] {
 }
 
 export function formatAmount(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
+  // 使用 MON (Monad 测试网代币)
+  return `${amount.toLocaleString('en-US')} MON`
 }
 
 export function formatDate(dateString: string): string {
@@ -396,4 +392,20 @@ export const categoryColors: Record<string, { bg: string; text: string; border: 
 
 export function getCategoryStyle(category: string) {
   return categoryColors[category] || { bg: 'bg-[#C4866B]/10', text: 'text-[#B5776C]', border: 'border-[#C4866B]/20' }
+}
+
+// Category image styles
+export function getCategoryImage(category: string): string {
+  switch (category) {
+    case '女性健康':
+      return 'campaign-health'
+    case '女性教育':
+      return 'campaign-education'
+    case '女性赋能':
+      return 'campaign-empowerment'
+    case '心理健康':
+      return 'campaign-mental'
+    default:
+      return 'campaign-image'
+  }
 }
