@@ -32,6 +32,8 @@ export default function TestContractsPage() {
 
   // Milestone 表单状态
   const [milestoneId, setMilestoneId] = useState('1')
+  const [withdrawalId, setWithdrawalId] = useState('1')
+  const [depositAmount, setDepositAmount] = useState('0.01')
   const [newMilestone, setNewMilestone] = useState({
     campaignId: '1',
     title: '第一阶段 - 采购医疗设备',
@@ -238,13 +240,27 @@ export default function TestContractsPage() {
     functionName: 'milestoneCount',
   })
 
-  const { data: campaignBalance } = useReadContract({
+  const { data: campaignBalance, refetch: refetchCampaignBalance } = useReadContract({
     ...contractConfig.milestoneVault,
     functionName: 'getCampaignBalance',
     args: [BigInt(campaignId)],
     query: {
       enabled: !!campaignId && campaignId !== '0',
     },
+  })
+
+  const { data: withdrawalRecord, refetch: refetchWithdrawal } = useReadContract({
+    ...contractConfig.milestoneVault,
+    functionName: 'getWithdrawal',
+    args: [BigInt(withdrawalId)],
+    query: {
+      enabled: !!withdrawalId && withdrawalId !== '0',
+    },
+  })
+
+  const { data: withdrawalCount } = useReadContract({
+    ...contractConfig.milestoneVault,
+    functionName: 'withdrawalCount',
   })
 
   const { writeContract: withdrawWithProof, isPending: isWithdrawing } = useWriteContract({
@@ -260,13 +276,47 @@ export default function TestContractsPage() {
     },
   })
 
+  const { writeContract: depositToVault, isPending: isDepositing } = useWriteContract({
+    mutation: {
+      onSuccess: (data) => {
+        addLog('✅ 存款成功！')
+        addLog(`📝 交易哈希: ${data}`)
+        refetchCampaignBalance()
+      },
+      onError: (error: any) => {
+        addLog(`❌ 存款失败: ${error.message}`)
+      },
+    },
+  })
+
+  const handleDeposit = async () => {
+    if (!address) {
+      addLog('❌ 请先连接钱包')
+      return
+    }
+    try {
+      addLog('💰 向 MilestoneVault 存款...')
+      addLog(`   项目ID: ${campaignId}`)
+      addLog(`   金额: ${depositAmount} MON`)
+
+      await depositToVault({
+        ...contractConfig.milestoneVault,
+        functionName: 'deposit',
+        args: [BigInt(campaignId)],
+        value: parseEther(depositAmount),
+      })
+    } catch (error: any) {
+      addLog(`❌ 错误: ${error.message}`)
+    }
+  }
+
   const handleWithdraw = async () => {
     if (!address) {
       addLog('❌ 请先连接钱包')
       return
     }
     try {
-      addLog('💸 提取资金...')
+      addLog('💸 凭证提款...')
       addLog(`   项目ID: ${campaignId}`)
       addLog(`   里程碑ID: ${milestoneId}`)
       addLog(`   凭证ID: ${proofId}`)
@@ -342,7 +392,7 @@ export default function TestContractsPage() {
   return (
     <div className="container mx-auto py-8 px-4 max-w-7xl">
       <h1 className="text-4xl font-bold mb-4">🧪 GiveFlow 全功能测试</h1>
-      <p className="text-gray-600 mb-6">测试所有 4 个合约的完整功能</p>
+      <p className="text-gray-600 mb-6">测试所有 4 个合约的完整功能，包括捐赠、存款、凭证审核、里程碑提款等</p>
 
       {/* 钱包状态 */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">
@@ -620,6 +670,41 @@ export default function TestContractsPage() {
                 </div>
               </div>
 
+              <div className="bg-white rounded-lg shadow p-6 border-2 border-blue-200">
+                <h2 className="text-xl font-semibold mb-4">💰 向保险库存款</h2>
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600">
+                    将资金存入 MilestoneVault，用于后续里程碑提款
+                  </p>
+                  <input
+                    type="number"
+                    value={campaignId}
+                    onChange={(e) => setCampaignId(e.target.value)}
+                    placeholder="项目 ID"
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900"
+                  />
+                  <input
+                    type="number"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(e.target.value)}
+                    placeholder="存款金额"
+                    step="0.001"
+                    min="0.001"
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900"
+                  />
+                  <button
+                    onClick={handleDeposit}
+                    disabled={!isConnected || isDepositing}
+                    className="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:bg-gray-300"
+                  >
+                    {isDepositing ? '存款中...' : '💰 存入保险库'}
+                  </button>
+                  <p className="text-xs text-gray-500">
+                    💡 存款后可在里程碑中使用凭证提取
+                  </p>
+                </div>
+              </div>
+
               <div className="bg-white rounded-lg shadow p-6 border-2 border-teal-200">
                 <h2 className="text-xl font-semibold mb-4">💸 提取资金</h2>
                 <div className="space-y-3">
@@ -654,6 +739,32 @@ export default function TestContractsPage() {
                   <p className="text-xs text-gray-500">
                     需要凭证审核通过才能提款
                   </p>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow p-6 border-2 border-indigo-200">
+                <h2 className="text-xl font-semibold mb-4">🔍 查询支取记录</h2>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">支取记录总数:</span>
+                    <span className="text-xl font-bold text-indigo-600">
+                      {withdrawalCount?.toString() || '0'}
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    value={withdrawalId}
+                    onChange={(e) => setWithdrawalId(e.target.value)}
+                    placeholder="支取记录 ID"
+                    min="1"
+                    className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900"
+                  />
+                  <button
+                    onClick={() => refetchWithdrawal()}
+                    className="w-full bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600"
+                  >
+                    查询支取记录
+                  </button>
                 </div>
               </div>
             </>
@@ -757,6 +868,25 @@ export default function TestContractsPage() {
               <p className="text-sm text-gray-500 mt-1">
                 项目 {campaignId} 在 MilestoneVault 中的余额
               </p>
+            </div>
+          )}
+
+          {/* 支取记录详情 */}
+          {withdrawalRecord && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold mb-3">💸 支取记录详情</h3>
+              <div className="space-y-2 text-sm">
+                <p><strong>ID:</strong> {(withdrawalRecord as any).id?.toString() || 'N/A'}</p>
+                <p><strong>项目ID:</strong> {(withdrawalRecord as any).campaignId?.toString() || 'N/A'}</p>
+                <p><strong>里程碑ID:</strong> {(withdrawalRecord as any).milestoneId?.toString() || 'N/A'}</p>
+                <p><strong>凭证ID:</strong> {(withdrawalRecord as any).proofId?.toString() || 'N/A'}</p>
+                <p><strong>接收者:</strong> {(withdrawalRecord as any).recipient || 'N/A'}</p>
+                <p><strong>金额:</strong> {(withdrawalRecord as any).amount ? formatEther((withdrawalRecord as any).amount) : '0'} MON</p>
+                <p><strong>时间:</strong> {(withdrawalRecord as any).timestamp ? new Date(Number((withdrawalRecord as any).timestamp) * 1000).toLocaleString() : 'N/A'}</p>
+                <p className="text-xs text-gray-500 break-all">
+                  <strong>交易哈希:</strong> {(withdrawalRecord as any).txHash || 'N/A'}
+                </p>
+              </div>
             </div>
           )}
 
