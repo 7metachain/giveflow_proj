@@ -27,6 +27,7 @@ import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
 import { decodeEventLog, keccak256, parseEther, toHex, toBytes } from 'viem'
 import { ProofRegistryABI, MilestoneVaultABI } from '@/lib/contracts'
 import { CONTRACT_ADDRESSES, monadTestnet } from '@/lib/web3'
+import { mockCampaigns } from '@/lib/mock-data'
 
 type ReviewStatus = 'idle' | 'submitting' | 'reviewing' | 'withdrawing' | 'complete' | 'error'
 
@@ -40,8 +41,12 @@ export default function ProofUploadPage() {
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>('idle')
   const [reviewProgress, setReviewProgress] = useState(0)
   const [requestAmount, setRequestAmount] = useState('3000')
-  const [campaignId, setCampaignId] = useState('1')
-  const [milestoneId, setMilestoneId] = useState('1')
+  const [campaignId, setCampaignId] = useState('')
+  const [milestoneId, setMilestoneId] = useState('')
+  
+  // 获取当前选中项目的里程碑列表
+  const selectedCampaign = mockCampaigns.find(c => c.id === campaignId)
+  const milestones = selectedCampaign?.milestones || []
   const [proofId, setProofId] = useState<bigint | null>(null)
   const [submitTxHash, setSubmitTxHash] = useState<`0x${string}` | null>(null)
   const [reviewTxHash, setReviewTxHash] = useState<`0x${string}` | null>(null)
@@ -69,6 +74,10 @@ export default function ProofUploadPage() {
     if (!selectedFile || !publicClient || !writeContractAsync) return
     if (!isConnected || !address) {
       setErrorMessage('请先连接钱包')
+      return
+    }
+    if (!campaignId || !milestoneId) {
+      setErrorMessage('请选择项目和里程碑')
       return
     }
 
@@ -260,27 +269,41 @@ export default function ProofUploadPage() {
                   <div className="mt-6 grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-[#5D4E47] mb-2">
-                        项目 ID
+                        选择项目
                       </label>
-                      <Input
-                        type="number"
+                      <select
                         value={campaignId}
-                        onChange={(e) => setCampaignId(e.target.value)}
-                        className="bg-[#FAF7F2] border-[#E8E2D9] text-[#3D3D3D] focus:border-[#C4866B]"
-                        placeholder="输入项目ID"
-                      />
+                        onChange={(e) => {
+                          setCampaignId(e.target.value)
+                          setMilestoneId('') // 重置里程碑选择
+                        }}
+                        className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8E2D9] text-[#3D3D3D] rounded-md focus:border-[#C4866B] focus:outline-none focus:ring-1 focus:ring-[#C4866B]"
+                      >
+                        <option value="">请选择项目</option>
+                        {mockCampaigns.map((campaign) => (
+                          <option key={campaign.id} value={campaign.id}>
+                            {campaign.title}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-[#5D4E47] mb-2">
-                        里程碑 ID
+                        选择里程碑
                       </label>
-                      <Input
-                        type="number"
+                      <select
                         value={milestoneId}
                         onChange={(e) => setMilestoneId(e.target.value)}
-                        className="bg-[#FAF7F2] border-[#E8E2D9] text-[#3D3D3D] focus:border-[#C4866B]"
-                        placeholder="输入里程碑ID"
-                      />
+                        disabled={!campaignId}
+                        className="w-full px-3 py-2 bg-[#FAF7F2] border border-[#E8E2D9] text-[#3D3D3D] rounded-md focus:border-[#C4866B] focus:outline-none focus:ring-1 focus:ring-[#C4866B] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="">请选择里程碑</option>
+                        {milestones.map((milestone, index) => (
+                          <option key={milestone.id} value={String(index + 1)}>
+                            {milestone.title} ({milestone.status === 'completed' ? '已完成' : milestone.status === 'in_progress' ? '进行中' : '待开始'})
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 )}
@@ -301,7 +324,7 @@ export default function ProofUploadPage() {
                       />
                       <Button
                         onClick={startAIReview}
-                        disabled={reviewStatus !== 'idle'}
+                        disabled={reviewStatus !== 'idle' || !campaignId || !milestoneId}
                         className="btn-sage px-6 rounded-full"
                       >
                         {reviewStatus === 'idle' ? (
