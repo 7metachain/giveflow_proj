@@ -46,40 +46,63 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
-/* GiveFlow Dark Theme */
+/* SHE³ Warm Theme - Earthy, Human-centric */
 :root {
-  --radius: 0.625rem;
-  --background: #020617;
-  --foreground: #f8fafc;
-  --card: #0f172a;
-  --card-foreground: #f8fafc;
-  --popover: #0f172a;
-  --popover-foreground: #f8fafc;
-  --primary: #10b981;
-  --primary-foreground: #ffffff;
-  --secondary: #1e293b;
-  --secondary-foreground: #f8fafc;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  --accent: #14b8a6;
-  --accent-foreground: #ffffff;
-  --destructive: #ef4444;
-  --border: rgba(16, 185, 129, 0.2);
-  --input: rgba(255, 255, 255, 0.1);
-  --ring: #10b981;
-  --chart-1: #10b981;
-  --chart-2: #14b8a6;
-  --chart-3: #06b6d4;
-  --chart-4: #8b5cf6;
-  --chart-5: #ec4899;
-  --sidebar: #0f172a;
-  --sidebar-foreground: #f8fafc;
-  --sidebar-primary: #10b981;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #1e293b;
-  --sidebar-accent-foreground: #f8fafc;
-  --sidebar-border: rgba(16, 185, 129, 0.2);
-  --sidebar-ring: #10b981;
+  --radius: 1rem;
+  /* Warm beige background */
+  --background: #FAF7F2;
+  --foreground: #3D3D3D;
+  /* Warm card colors */
+  --card: #FFFFFF;
+  --card-foreground: #3D3D3D;
+  --popover: #FFFFFF;
+  --popover-foreground: #3D3D3D;
+  /* Soft terracotta as primary */
+  --primary: #C4866B;
+  --primary-foreground: #FFFFFF;
+  /* Muted sage as secondary */
+  --secondary: #A8B5A0;
+  --secondary-foreground: #3D3D3D;
+  /* Warm muted tones */
+  --muted: #F0EBE3;
+  --muted-foreground: #7A7A7A;
+  /* Accent - warm coral */
+  --accent: #D4A59A;
+  --accent-foreground: #3D3D3D;
+  --destructive: #C97065;
+  /* Soft borders */
+  --border: #E8E2D9;
+  --input: #F5F2ED;
+  --ring: #C4866B;
+  /* Chart colors - earthy palette */
+  --chart-1: #C4866B;
+  --chart-2: #A8B5A0;
+  --chart-3: #D4A59A;
+  --chart-4: #B8A99A;
+  --chart-5: #8FA584;
+  /* Sidebar */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #3D3D3D;
+  --sidebar-primary: #C4866B;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F5F2ED;
+  --sidebar-accent-foreground: #3D3D3D;
+  --sidebar-border: #E8E2D9;
+  --sidebar-ring: #C4866B;
+}
+
+/* Dark mode override - keeping it warm */
+.dark {
+  --background: #2D2A26;
+  --foreground: #F5F2ED;
+  --card: #3A3632;
+  --card-foreground: #F5F2ED;
+  --popover: #3A3632;
+  --popover-foreground: #F5F2ED;
+  --muted: #4A4541;
+  --muted-foreground: #B8B2A8;
+  --border: #4A4541;
+  --input: #4A4541;
 }
 
 @layer base {
@@ -88,109 +111,210 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #020617 100%);
+    background: linear-gradient(180deg, #FAF7F2 0%, #F5F0E8 100%);
     min-height: 100vh;
   }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - Warm theme */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.5);
+  background: #F0EBE3;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(16, 185, 129, 0.3);
+  background: #D4C8BC;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(16, 185, 129, 0.5);
+  background: #C4866B;
 }
 
-/* Glow effects */
-.glow-emerald {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3), 0 0 40px rgba(16, 185, 129, 0.1);
+/* Soft shadow for cards */
+.card-shadow {
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.05),
+    0 10px 20px -5px rgba(0, 0, 0, 0.04);
 }
 
-.glow-text {
-  text-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+.card-shadow-hover {
+  transition: all 0.3s ease;
 }
 
-/* Gradient text */
+.card-shadow-hover:hover {
+  box-shadow: 
+    0 10px 25px -5px rgba(0, 0, 0, 0.08),
+    0 20px 40px -10px rgba(0, 0, 0, 0.06);
+  transform: translateY(-2px);
+}
+
+/* Gradient text - warm tones */
 .gradient-text {
-  background: linear-gradient(135deg, #10b981 0%, #14b8a6 50%, #06b6d4 100%);
+  background: linear-gradient(135deg, #C4866B 0%, #D4A59A 50%, #A8B5A0 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* Card hover effect */
-.card-hover {
+/* Soft terracotta button */
+.btn-warm {
+  background: linear-gradient(135deg, #C4866B 0%, #D4A59A 100%);
+  color: white;
+  border: none;
   transition: all 0.3s ease;
 }
 
-.card-hover:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 40px rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.4);
+.btn-warm:hover {
+  background: linear-gradient(135deg, #B5776C 0%, #C4968B 100%);
+  box-shadow: 0 4px 15px rgba(196, 134, 107, 0.35);
 }
 
-/* Animated gradient background */
-@keyframes gradient-shift {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+/* Sage green button */
+.btn-sage {
+  background: linear-gradient(135deg, #A8B5A0 0%, #8FA584 100%);
+  color: white;
+  border: none;
+  transition: all 0.3s ease;
 }
 
-.animated-gradient {
-  background: linear-gradient(
-    135deg,
-    #10b981,
-    #14b8a6,
-    #06b6d4,
-    #10b981
-  );
-  background-size: 300% 300%;
-  animation: gradient-shift 8s ease infinite;
+.btn-sage:hover {
+  background: linear-gradient(135deg, #99A691 0%, #809675 100%);
+  box-shadow: 0 4px 15px rgba(168, 181, 160, 0.35);
 }
 
-/* Pulse animation for AI indicators */
-@keyframes pulse-glow {
+/* Progress bar - warm gradient */
+.progress-warm {
+  background: linear-gradient(90deg, #C4866B 0%, #D4A59A 100%);
+  border-radius: 999px;
+}
+
+/* Warm card styling */
+.warm-card {
+  background: white;
+  border: 1px solid #E8E2D9;
+  border-radius: 1rem;
+}
+
+/* Hero section pattern */
+.hero-pattern {
+  background-image: 
+    radial-gradient(circle at 20% 80%, rgba(196, 134, 107, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(168, 181, 160, 0.08) 0%, transparent 50%);
+}
+
+/* Illustration container */
+.illustration-container {
+  background: linear-gradient(135deg, #FAF7F2 0%, #F0EBE3 100%);
+  border-radius: 1.5rem;
+}
+
+/* Floating animation for illustrations */
+@keyframes float {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+    transform: translateY(0);
   }
   50% {
-    box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+    transform: translateY(-10px);
   }
 }
 
-.pulse-glow {
-  animation: pulse-glow 2s infinite;
+.float-animation {
+  animation: float 4s ease-in-out infinite;
 }
 
-/* Typing animation for AI */
-@keyframes typing {
-  0% {
-    width: 0;
+/* Pulse animation for CTAs */
+@keyframes gentle-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(196, 134, 107, 0.4);
   }
-  100% {
-    width: 100%;
+  50% {
+    box-shadow: 0 0 0 10px rgba(196, 134, 107, 0);
   }
 }
 
-.typing-animation {
-  overflow: hidden;
-  white-space: nowrap;
-  animation: typing 2s steps(40);
+.pulse-warm {
+  animation: gentle-pulse 2.5s infinite;
+}
+
+/* Typography helpers */
+.text-warm-dark {
+  color: #5D4E47;
+}
+
+.text-warm-muted {
+  color: #8A7B73;
+}
+
+/* Stat card styles */
+.stat-card {
+  background: white;
+  border: 1px solid #E8E2D9;
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+
+/* Badge styles */
+.badge-terracotta {
+  background: rgba(196, 134, 107, 0.12);
+  color: #B5776C;
+  border: 1px solid rgba(196, 134, 107, 0.2);
+}
+
+.badge-sage {
+  background: rgba(168, 181, 160, 0.12);
+  color: #7A8B72;
+  border: 1px solid rgba(168, 181, 160, 0.2);
+}
+
+.badge-warm {
+  background: rgba(212, 165, 154, 0.12);
+  color: #B08578;
+  border: 1px solid rgba(212, 165, 154, 0.2);
+}
+
+/* SHE³ Logo styling */
+.she3-logo {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #5D4E47;
+}
+
+.she3-logo sup {
+  font-size: 0.6em;
+  vertical-align: super;
+  color: #C4866B;
+}
+
+/* Navigation active state */
+.nav-active {
+  color: #C4866B;
+  position: relative;
+}
+
+.nav-active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #C4866B;
+  border-radius: 999px;
+}
+
+/* Input focus styles */
+input:focus, textarea:focus {
+  border-color: #C4866B;
+  box-shadow: 0 0 0 3px rgba(196, 134, 107, 0.15);
+}
+
+/* Divider */
+.divider-warm {
+  border-color: #E8E2D9;
 }

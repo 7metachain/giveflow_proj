@@ -11,9 +11,8 @@ import {
   Brain,
   Menu,
   X,
-  HandHeart,
+  Sparkles,
   RefreshCw,
-  ChevronDown,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useUser } from '@/lib/user-context'
@@ -29,22 +28,25 @@ export function Header() {
 
   const beneficiaryNav = [
     { href: '/dashboard/beneficiary', label: '项目管理', icon: FileCheck },
-    { href: '/proof/upload', label: '上传凭证申请提款', icon: Brain },
+    { href: '/proof/upload', label: '上传凭证', icon: Brain },
   ]
 
   const navItems = role === 'beneficiary' ? beneficiaryNav : donorNav
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-emerald-500/20 bg-slate-950/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 w-full border-b border-[#E8E2D9] bg-white/95 backdrop-blur-sm">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500">
-            <Heart className="h-5 w-5 text-white" fill="white" />
+        <Link href="/" className="flex items-center gap-3 group">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-[#C4866B] to-[#D4A59A] shadow-sm group-hover:shadow-md transition-shadow">
+            <span className="text-lg">🌸</span>
           </div>
-          <span className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-            GiveFlow
-          </span>
+          <div className="flex flex-col">
+            <span className="text-xl font-bold she3-logo">
+              SHE<sup>³</sup>
+            </span>
+            <span className="text-[10px] text-[#B8A99A] -mt-0.5 hidden sm:block">为她赋能</span>
+          </div>
         </Link>
 
         {/* Desktop Navigation */}
@@ -54,7 +56,7 @@ export function Header() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="text-sm text-slate-400 hover:text-emerald-400 transition-colors px-3 py-2 rounded-md hover:bg-slate-800/50 flex items-center gap-1.5"
+                className="text-sm text-[#5D4E47] hover:text-[#C4866B] transition-colors px-4 py-2 rounded-lg hover:bg-[#F5F2ED] flex items-center gap-1.5"
               >
                 {item.icon && <item.icon className="h-4 w-4" />}
                 {item.label}
@@ -69,17 +71,17 @@ export function Header() {
           {isRoleSelected && (
             <div className="hidden md:flex items-center gap-2">
               <Badge
-                className={`cursor-pointer ${
+                className={`cursor-pointer transition-all ${
                   role === 'beneficiary'
-                    ? 'bg-teal-500/10 text-teal-400 border-teal-500/30 hover:bg-teal-500/20'
-                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                }`}
+                    ? 'badge-sage'
+                    : 'badge-terracotta'
+                } hover:opacity-80`}
                 onClick={clearRole}
               >
                 {role === 'beneficiary' ? (
-                  <><HandHeart className="w-3 h-3 mr-1" />募捐者</>
+                  <><Sparkles className="w-3 h-3 mr-1" />项目发起人</>
                 ) : (
-                  <><Heart className="w-3 h-3 mr-1" fill="currentColor" />捐赠者</>
+                  <><Heart className="w-3 h-3 mr-1" />支持者</>
                 )}
                 <RefreshCw className="w-3 h-3 ml-1.5 opacity-60" />
               </Badge>
@@ -116,7 +118,7 @@ export function Header() {
                         <Button
                           onClick={openConnectModal}
                           size="sm"
-                          className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white"
+                          className="btn-warm rounded-full px-5"
                         >
                           连接钱包
                         </Button>
@@ -129,6 +131,7 @@ export function Header() {
                           onClick={openChainModal}
                           variant="destructive"
                           size="sm"
+                          className="rounded-full"
                         >
                           切换网络
                         </Button>
@@ -141,7 +144,7 @@ export function Header() {
                           onClick={openChainModal}
                           variant="outline"
                           size="sm"
-                          className="hidden sm:flex border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                          className="hidden sm:flex border-[#E8E2D9] bg-[#F5F2ED] text-[#5D4E47] hover:bg-[#E8E2D9] rounded-full"
                         >
                           {chain.name}
                         </Button>
@@ -149,7 +152,7 @@ export function Header() {
                           onClick={openAccountModal}
                           variant="outline"
                           size="sm"
-                          className="border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-700"
+                          className="border-[#E8E2D9] bg-white text-[#5D4E47] hover:bg-[#F5F2ED] rounded-full"
                         >
                           {account.displayName}
                         </Button>
@@ -163,7 +166,7 @@ export function Header() {
 
           {/* Mobile menu button */}
           <button
-            className="md:hidden p-2 text-slate-400 hover:text-white"
+            className="md:hidden p-2 text-[#5D4E47] hover:text-[#C4866B] rounded-lg hover:bg-[#F5F2ED]"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -173,26 +176,26 @@ export function Header() {
 
       {/* Mobile Menu */}
       {mobileMenuOpen && isRoleSelected && (
-        <div className="md:hidden border-t border-emerald-500/20 bg-slate-950/95 backdrop-blur-xl">
+        <div className="md:hidden border-t border-[#E8E2D9] bg-white">
           <nav className="container mx-auto px-4 py-4 space-y-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center gap-2 text-slate-400 hover:text-emerald-400 py-2 px-3 rounded-lg hover:bg-slate-800/50"
+                className="flex items-center gap-2 text-[#5D4E47] hover:text-[#C4866B] py-2 px-3 rounded-lg hover:bg-[#F5F2ED]"
               >
                 {item.icon && <item.icon className="h-4 w-4" />}
                 {item.label}
               </Link>
             ))}
-            <div className="pt-2 mt-2 border-t border-slate-800">
+            <div className="pt-2 mt-2 border-t border-[#E8E2D9]">
               <button
                 onClick={() => {
                   clearRole()
                   setMobileMenuOpen(false)
                 }}
-                className="flex items-center gap-2 text-slate-500 hover:text-slate-300 py-2 px-3 w-full"
+                className="flex items-center gap-2 text-[#B8A99A] hover:text-[#5D4E47] py-2 px-3 w-full"
               >
                 <RefreshCw className="h-4 w-4" />
                 切换角色

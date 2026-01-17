@@ -1,73 +1,96 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
+import { chatCompletion, chatCompletionStream, parseSSEStream, type ChatMessage } from '@/lib/ai-client'
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+// System prompt for SHE³ AI Assistant
+const SYSTEM_PROMPT = `你是 SHE³（读作 "She Cubed"）女性公益平台的 AI 助手。SHE³ 专注于女性健康与教育公益。
 
-// System prompt for GiveFlow AI Assistant
-const SYSTEM_PROMPT = `你是 GiveFlow 公益捐赠平台的 AI 助手。你的任务是帮助用户：
-1. 发现和推荐合适的公益项目
-2. 协助完成捐赠流程
+## 你的任务
+1. 发现和推荐女性相关的公益项目
+2. 协助用户完成捐赠流程（支持批量捐赠）
 3. 追踪捐赠资金的链上流向
-4. 解答关于平台和区块链捐赠的问题
+4. 解答关于平台的问题
 
-你需要：
-- 友好、专业、有同理心
-- 用简洁清晰的语言回复
-- 当用户表达捐赠意愿时，引导他们选择项目
-- 强调平台的透明性：AI 审核凭证、链上存证
-- 适当使用 emoji 增加亲和力
+## 你的性格
+- 温暖、专业、富有同理心
+- 用简洁清晰的中文回复，每次不超过 150 字
+- 适当使用 emoji（💜 💕 🩺 📚 ✨ 🌸）
+- 主动引导用户下一步操作
 
-当前可用的公益项目：
-1. 乡村医疗救助计划 - 为偏远山区村民提供基本医疗服务（医疗健康类，目标$10,000，已筹$7,500）
-2. 山区儿童教育支持 - 为贫困山区孩子提供学习用品和在线教育资源（教育助学类，目标$15,000，已筹$12,000）
-3. 灾区紧急救援物资 - 为受灾地区提供食品、饮水和临时住所（灾害救助类，目标$50,000，已筹$35,000）
+## 当前可用的公益项目
 
-回复格式要求：
-- 必须返回 JSON 格式
-- 包含 message (回复文本) 和 action (可选操作)
-- action 类型: search_campaigns, show_campaign, donate, track_donations, connect_wallet
+### 女性健康类
+1. **农村女性宫颈癌筛查计划** - 为偏远地区女性提供免费HPV检测和早筛服务（目标$15,000，已筹$11,250）
+2. **女性心理健康热线** - 24小时女性心理援助热线（目标$25,000，已筹$17,500）
 
-JSON 格式示例：
-{
-  "message": "你的回复文本",
-  "action": {
-    "type": "search_campaigns",
-    "params": { "category": "医疗健康" }
-  }
-}`
+### 女性教育类
+3. **山区女孩编程夏令营** - 为贫困山区女孩提供STEM教育和编程培训（目标$20,000，已筹$16,000）
+4. **乡村女教师成长计划** - 资助偏远地区女教师参加教学能力提升培训（目标$18,000，已筹$10,800）
+
+### 女性赋能类
+5. **单亲妈妈职业技能培训** - 帮助单亲妈妈学习职业技能，实现经济独立（目标$12,000，已筹$8,400）
+
+## 项目分类说明
+- **女性健康**: 疾病筛查、体检、医疗援助、心理健康
+- **女性教育**: STEM教育、职业培训、学业资助、教师培训
+- **女性赋能**: 经济独立、职业技能、创业支持
+- **心理健康**: 心理咨询、情绪支持、危机干预
+
+## 重要说明
+- 平台专注于女性公益，暂不涉及家庭婚姻、儿童福利等其他领域
+- 如果用户询问非女性公益相关的内容，请友好解释平台的专注领域，并推荐相关的女性项目
+- 例如：用户问"家庭婚姻"相关，可以推荐"单亲妈妈职业技能培训"或"女性心理健康热线"
+
+## 平台特色
+- 使用 Monad 区块链，交易 1 秒确认，费用极低
+- 支持批量捐赠：一次选择多个项目
+- AI 审核凭证：项目发起人上传发票，AI 验证后才能提款
+- 全程透明：所有交易记录在链上
+
+## 回复格式
+直接回复用户问题，保持自然流畅。当推荐项目时，简要介绍项目亮点和进度。`
 
 interface ChatRequest {
   messages: { role: 'user' | 'assistant'; content: string }[]
   userAddress?: string
+  stream?: boolean
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json()
-    const { messages, userAddress } = body
+    const { messages, stream = false } = body
 
-    // Check if we have OpenAI API key
-    if (!process.env.OPENAI_API_KEY) {
-      // Return mock response for demo
-      return NextResponse.json(generateMockResponse(messages[messages.length - 1]?.content || ''))
+    // Build messages array with system prompt
+    const aiMessages: ChatMessage[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...messages.map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      })),
+    ]
+
+    // Stream mode
+    if (stream) {
+      const responseStream = await chatCompletionStream(aiMessages, {
+        maxTokens: 500,
+        temperature: 0.7,
+      })
+
+      const textStream = parseSSEStream(responseStream)
+      
+      return new Response(textStream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      })
     }
 
-    // Call OpenAI
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...messages.map((m) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        })),
-      ],
-      max_tokens: 500,
+    // Non-stream mode
+    const response = await chatCompletion(aiMessages, {
+      maxTokens: 500,
       temperature: 0.7,
-      response_format: { type: 'json_object' },
     })
 
     const content = response.choices[0]?.message?.content
@@ -75,81 +98,68 @@ export async function POST(request: NextRequest) {
       throw new Error('No response from AI')
     }
 
-    const parsed = JSON.parse(content)
-    return NextResponse.json(parsed)
+    // Parse response and try to extract action
+    const result = parseAIResponse(content)
+    return NextResponse.json(result)
 
   } catch (error) {
     console.error('Chat API error:', error)
     // Return mock response on error
     return NextResponse.json({
-      message: '抱歉，我遇到了一点问题。请再试一次，或者直接告诉我你想做什么：\n\n• 推荐项目\n• 进行捐赠\n• 查看资金流向',
+      message: '抱歉，我遇到了一点问题。请再试一次，或者直接告诉我你想做什么：\n\n• 推荐女性健康项目\n• 推荐教育相关项目\n• 查看资金流向',
       action: null,
     })
   }
 }
 
-// Generate mock response for demo (when no API key)
-function generateMockResponse(userMessage: string): { message: string; action: { type: string; params?: Record<string, unknown> } | null } {
-  const lowerMsg = userMessage.toLowerCase()
+// Parse AI response and extract potential actions
+function parseAIResponse(content: string): { message: string; action: { type: string; params?: Record<string, unknown> } | null } {
+  const lowerContent = content.toLowerCase()
+  
+  // Detect action intents from AI response
+  let action: { type: string; params?: Record<string, unknown> } | null = null
 
+  // Project recommendation
+  if (
+    (lowerContent.includes('项目') && (lowerContent.includes('推荐') || lowerContent.includes('这些') || lowerContent.includes('以下'))) ||
+    lowerContent.includes('宫颈癌筛查') ||
+    lowerContent.includes('心理健康热线') ||
+    lowerContent.includes('编程夏令营') ||
+    lowerContent.includes('女教师') ||
+    lowerContent.includes('单亲妈妈')
+  ) {
+    action = { type: 'search_campaigns', params: {} }
+  }
+  
+  // Category-specific
+  if (lowerContent.includes('健康') || lowerContent.includes('医疗') || lowerContent.includes('筛查') || lowerContent.includes('体检')) {
+    action = { type: 'search_campaigns', params: { category: '女性健康' } }
+  } else if (lowerContent.includes('教育') || lowerContent.includes('培训') || lowerContent.includes('学习') || lowerContent.includes('编程')) {
+    action = { type: 'search_campaigns', params: { category: '女性教育' } }
+  } else if (lowerContent.includes('赋能') || lowerContent.includes('独立') || lowerContent.includes('职业') || lowerContent.includes('技能')) {
+    action = { type: 'search_campaigns', params: { category: '女性赋能' } }
+  } else if (lowerContent.includes('心理') || lowerContent.includes('情绪') || lowerContent.includes('咨询')) {
+    action = { type: 'search_campaigns', params: { category: '心理健康' } }
+  }
+  
   // Donation intent
-  if (lowerMsg.includes('捐') || lowerMsg.includes('donate')) {
-    return {
-      message: '太好了，感谢你的爱心！💚\n\n我为你推荐了几个优质的公益项目。每个项目都经过验证，资金使用全程透明。\n\n你可以选择任意项目进行捐赠，或者告诉我你更感兴趣的领域（如医疗、教育、灾害救助）。',
-      action: { type: 'search_campaigns', params: {} },
-    }
+  if (lowerContent.includes('捐赠') || lowerContent.includes('捐款') || lowerContent.includes('支持')) {
+    action = { type: 'donate', params: {} }
+  }
+  
+  // Track donations
+  if (lowerContent.includes('追踪') || lowerContent.includes('流向') || lowerContent.includes('记录') || lowerContent.includes('历史')) {
+    action = { type: 'track_donations', params: {} }
+  }
+  
+  // Wallet
+  if (lowerContent.includes('连接钱包') || lowerContent.includes('钱包')) {
+    action = { type: 'connect_wallet', params: {} }
   }
 
-  // Search intent
-  if (lowerMsg.includes('医疗') || lowerMsg.includes('健康')) {
-    return {
-      message: '我找到了医疗健康相关的项目：\n\n**乡村医疗救助计划** 正在进行中，已有 156 人参与，目前进度 75%。\n\n这个项目帮助偏远山区村民获得基本医疗服务，每一分钱的使用都需要通过 AI 审核。',
-      action: { type: 'search_campaigns', params: { category: '医疗健康' } },
-    }
-  }
-
-  if (lowerMsg.includes('教育') || lowerMsg.includes('孩子') || lowerMsg.includes('学校')) {
-    return {
-      message: '这是教育相关的公益项目：\n\n**山区儿童教育支持** 已筹集 $12,000，帮助贫困山区的孩子获得学习资源。\n\n80% 的资金已用于采购学习用品和建设图书馆，所有支出凭证都经过了 AI 验证。',
-      action: { type: 'search_campaigns', params: { category: '教育助学' } },
-    }
-  }
-
-  if (lowerMsg.includes('灾害') || lowerMsg.includes('救援') || lowerMsg.includes('紧急')) {
-    return {
-      message: '紧急救援类项目：\n\n**灾区紧急救援物资** 目前已筹集 $35,000，正在为受灾群众提供食品、饮水和临时住所。\n\n第一阶段的紧急物资已发放完毕，所有采购凭证都已通过 AI 审核并上链存证。',
-      action: { type: 'search_campaigns', params: { category: '灾害救助' } },
-    }
-  }
-
-  // Tracking intent
-  if (lowerMsg.includes('追踪') || lowerMsg.includes('资金') || lowerMsg.includes('流向') || lowerMsg.includes('记录')) {
-    return {
-      message: '好的，我来帮你查看捐赠记录和资金流向！📊\n\n每笔捐赠都记录在 Monad 区块链上，你可以看到：\n• 捐赠时间和金额\n• 资金分配到哪个里程碑\n• 每笔支出的 AI 审核结果\n\n请先连接钱包，我就能显示你的完整捐赠历史。',
-      action: { type: 'track_donations' },
-    }
-  }
-
-  // Greeting
-  if (lowerMsg.includes('你好') || lowerMsg.includes('hi') || lowerMsg.includes('hello')) {
-    return {
-      message: '你好！我是 GiveFlow AI 助手 💚\n\n我可以帮你：\n• 🔍 **发现项目** - 找到适合你的公益项目\n• 💰 **轻松捐赠** - 用自然语言完成捐赠\n• 👁️ **追踪资金** - 查看每一分钱的去向\n\n试试说："推荐一些医疗相关的项目" 或 "我想捐 50 美元"',
-      action: null,
-    }
-  }
-
-  // General/推荐
-  if (lowerMsg.includes('推荐') || lowerMsg.includes('项目') || lowerMsg.includes('有什么')) {
-    return {
-      message: '这是我为你精选的公益项目：\n\n1️⃣ **乡村医疗救助** - 帮助偏远山区村民\n2️⃣ **山区儿童教育** - 支持孩子获得教育资源  \n3️⃣ **灾区紧急救援** - 为受灾群众提供物资\n\n所有项目都经过验证，资金使用透明。告诉我你感兴趣的项目，我帮你了解更多！',
-      action: { type: 'search_campaigns', params: {} },
-    }
-  }
-
-  // Default response
   return {
-    message: '我是 GiveFlow AI 助手，专注于帮你完成透明公益捐赠。\n\n你可以试试：\n• "推荐一些公益项目"\n• "我想给医疗项目捐款"\n• "查看我的捐赠记录"\n\n有什么我可以帮你的吗？ 💚',
-    action: null,
+    message: content,
+    action,
   }
 }
 
@@ -157,7 +167,7 @@ function generateMockResponse(userMessage: string): { message: string; action: {
 export async function GET() {
   return NextResponse.json({
     status: 'ok',
-    hasApiKey: !!process.env.OPENAI_API_KEY,
-    model: 'gpt-4o-mini',
+    provider: 'wanjiedata',
+    model: 'deepseek-v3-2-251201',
   })
 }
