@@ -98,6 +98,16 @@ export default function TestContractsPage() {
     },
   })
 
+  const handleFetchCampaign = async () => {
+    addLog(`📊 查询项目 ${campaignId}...`)
+    try {
+      await refetchCampaign()
+      addLog(`✅ 查询成功`)
+    } catch (error: any) {
+      addLog(`❌ 查询失败: ${error.message}`)
+    }
+  }
+
   const { writeContract: donate, isPending: isDonating } = useWriteContract({
     mutation: {
       onSuccess: () => {
@@ -181,6 +191,16 @@ export default function TestContractsPage() {
     },
   })
 
+  const handleFetchProof = async () => {
+    addLog(`🔍 查询凭证 ${proofId}...`)
+    try {
+      await refetchProof()
+      addLog(`✅ 查询成功`)
+    } catch (error: any) {
+      addLog(`❌ 查询失败: ${error.message}`)
+    }
+  }
+
   const { data: proofCount } = useReadContract({
     ...contractConfig.proofRegistry,
     functionName: 'proofCount',
@@ -235,6 +255,16 @@ export default function TestContractsPage() {
     },
   })
 
+  const handleFetchMilestone = async () => {
+    addLog(`🎯 查询里程碑 ${milestoneId}...`)
+    try {
+      await refetchMilestone()
+      addLog(`✅ 查询成功`)
+    } catch (error: any) {
+      addLog(`❌ 查询失败: ${error.message}`)
+    }
+  }
+
   const { data: milestoneCount } = useReadContract({
     ...contractConfig.milestoneVault,
     functionName: 'milestoneCount',
@@ -257,6 +287,16 @@ export default function TestContractsPage() {
       enabled: !!withdrawalId && withdrawalId !== '0',
     },
   })
+
+  const handleFetchWithdrawal = async () => {
+    addLog(`💸 查询支取记录 ${withdrawalId}...`)
+    try {
+      await refetchWithdrawal()
+      addLog(`✅ 查询成功`)
+    } catch (error: any) {
+      addLog(`❌ 查询失败: ${error.message}`)
+    }
+  }
 
   const { data: withdrawalCount } = useReadContract({
     ...contractConfig.milestoneVault,
@@ -526,7 +566,7 @@ export default function TestContractsPage() {
                   />
                   <div className="flex gap-2">
                     <button
-                      onClick={() => refetchCampaign()}
+                      onClick={handleFetchCampaign}
                       className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
                     >
                       查询项目
@@ -607,7 +647,7 @@ export default function TestContractsPage() {
                     className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900"
                   />
                   <button
-                    onClick={() => refetchProof()}
+                    onClick={handleFetchProof}
                     className="w-full bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600"
                   >
                     查询凭证
@@ -760,7 +800,7 @@ export default function TestContractsPage() {
                     className="w-full border border-gray-300 rounded px-3 py-2 text-gray-900"
                   />
                   <button
-                    onClick={() => refetchWithdrawal()}
+                    onClick={handleFetchWithdrawal}
                     className="w-full bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600"
                   >
                     查询支取记录
