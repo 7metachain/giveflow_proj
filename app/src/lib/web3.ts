@@ -35,8 +35,8 @@ export const config = getDefaultConfig({
 
 // Contract addresses (will be updated after deployment)
 export const CONTRACT_ADDRESSES = {
-  campaignRegistry: '0x0000000000000000000000000000000000000000',
-  proofRegistry: '0x0000000000000000000000000000000000000000',
-  milestoneVault: '0x0000000000000000000000000000000000000000',
-  batchDonate: '0x0000000000000000000000000000000000000000',
+  campaignRegistry: '0xe50e3B162a3671fc758FcD53766C95582DF63ebF',
+  proofRegistry: '0x47CE6C2Aa4BCd4F0b8991337DD14bd3C4b5d68c5',
+  milestoneVault: '0x25c7f99292a87C31d94bd741770d33A8d87a7c87',
+  batchDonate: '0xBAB71010e46DDf7B9E183d2C57753842d3cC5118',
 } as const

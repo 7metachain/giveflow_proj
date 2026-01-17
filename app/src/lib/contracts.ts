@@ -337,3 +337,27 @@ export const contractConfig = {
     abi: BatchDonateABI,
   },
 }
+
+// Helper function to get proof status text
+export function getProofStatusText(status: number): string {
+  const statusMap: Record<number, string> = {
+    0: '待审核',
+    1: 'AI 审核通过',
+    2: 'AI 审核拒绝',
+    3: '人工复核中',
+    4: '人工审核通过',
+    5: '人工审核拒绝',
+  }
+  return statusMap[status] || '未知状态'
+}
+
+// Helper function to get milestone status text
+export function getMilestoneStatusText(status: number): string {
+  const statusMap: Record<number, string> = {
+    0: '待开始',
+    1: '进行中',
+    2: '已完成',
+    3: '已取消',
+  }
+  return statusMap[status] || '未知状态'
+}
