@@ -27,9 +27,11 @@ import {
   Check,
   Minus,
   ListChecks,
+  ExternalLink,
 } from 'lucide-react'
-import { useAccount } from 'wagmi'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { parseEther, formatEther } from 'viem'
 import { useUser, type UserRole } from '@/lib/user-context'
 import {
   mockCampaigns,
@@ -37,6 +39,8 @@ import {
   getCategoryStyle,
   type Campaign,
 } from '@/lib/mock-data'
+import { BatchDonateABI } from '@/lib/contracts'
+import { CONTRACT_ADDRESSES, monadTestnet } from '@/lib/web3'
 
 // Tool definitions
 interface Tool {
@@ -108,7 +112,7 @@ async function callAI(messages: { role: 'user' | 'assistant'; content: string }[
 }
 
 // Map action to UI data
-function processAction(action: MessageAction | null, isConnected: boolean): MessageAction | undefined {
+function processAction(action: MessageAction | null, isConnected: boolean, isBatchMode: boolean = false): MessageAction | undefined {
   if (!action) return undefined
   
   switch (action.type) {
@@ -118,26 +122,25 @@ function processAction(action: MessageAction | null, isConnected: boolean): Mess
       if (category) {
         campaigns = mockCampaigns.filter(c => c.category.includes(category))
       }
+      // 如果是批量模式，返回 batch_select 类型
+      if (isBatchMode) {
+        return { type: 'batch_select', data: campaigns.slice(0, 5) }
+      }
       return { type: 'campaigns', data: campaigns.slice(0, 3) }
     
     case 'donate':
       if (!isConnected) {
         return { type: 'connect_wallet' }
       }
-      return { type: 'campaigns', data: mockCampaigns.slice(0, 3) }
+      // 捐赠也使用批量模式
+      return { type: 'batch_select', data: mockCampaigns.slice(0, 5) }
     
     case 'track_donations':
       if (!isConnected) {
         return { type: 'connect_wallet' }
       }
-      return { type: 'track', data: {
-        campaign: mockCampaigns[0],
-        donations: [
-          { amount: 100, date: '2026-01-15', txHash: '0xabc...' },
-          { amount: 50, date: '2026-01-10', txHash: '0xdef...' },
-        ],
-        totalDonated: 150
-      }}
+      // 不使用 mock，直接引导到链上真实记录页
+      return { type: 'track_donations' }
     
     case 'connect_wallet':
       return { type: 'connect_wallet' }
@@ -179,7 +182,7 @@ interface BatchSelection {
 
 export function GlobalChatbot() {
   const { role } = useUser()
-  const { isConnected } = useAccount()
+  const { isConnected, address } = useAccount()
   const [isOpen, setIsOpen] = useState(true) // 默认打开
   const [isMinimized, setIsMinimized] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
@@ -190,6 +193,15 @@ export function GlobalChatbot() {
   const [batchSelections, setBatchSelections] = useState<BatchSelection[]>([])
   const [showBatchConfirm, setShowBatchConfirm] = useState(false)
   const [isDonating, setIsDonating] = useState(false)
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
+  const [txError, setTxError] = useState<string | null>(null)
+
+  // 合约交互 hooks
+  const { writeContract, data: writeTxHash, isPending: isWritePending, error: writeError, reset: resetWrite } = useWriteContract()
+  
+  const { isLoading: isConfirming, isSuccess: isTxSuccess } = useWaitForTransactionReceipt({
+    hash: writeTxHash,
+  })
 
   // Conversation history for AI
   const [conversationHistory, setConversationHistory] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
@@ -215,24 +227,115 @@ export function GlobalChatbot() {
   const selectedCount = batchSelections.filter(s => s.selected).length
   const totalAmount = batchSelections.filter(s => s.selected).reduce((sum, s) => sum + s.amount, 0)
   
+  // 监听交易成功
+  useEffect(() => {
+    if (isTxSuccess && writeTxHash) {
+      const selectedItems = batchSelections.filter(s => s.selected)
+      const campaigns = selectedItems.map(s => mockCampaigns.find(c => c.id === s.campaignId)!)
+      
+      const successMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `🎉 **批量支持成功！**\n\n你已向 ${selectedItems.length} 个女性公益项目支持共计 **${totalAmount} MON**\n\n${campaigns.map((c, i) => `✅ ${c.title} - ${selectedItems[i].amount} MON`).join('\n')}\n\n📜 **交易哈希**: ${writeTxHash.slice(0, 10)}...${writeTxHash.slice(-8)}\n\n所有交易已记录在 Monad 区块链上 ⛓️\n\n👉 [点击这里查看链上记录](/dashboard/donor)\n\n感谢你为女性公益贡献力量！🌸`,
+        timestamp: new Date(),
+      }
+      
+      setMessages(prev => [...prev, successMessage])
+      setShowBatchConfirm(false)
+      setBatchSelections([])
+      setIsDonating(false)
+      setTxHash(writeTxHash)
+      
+      console.log('✅ 批量捐赠链上交易成功！', {
+        txHash: writeTxHash,
+        项目数: selectedItems.length,
+        总金额: totalAmount + ' MON',
+      })
+    }
+  }, [isTxSuccess, writeTxHash])
+  
+  // 监听交易错误
+  useEffect(() => {
+    if (writeError) {
+      setIsDonating(false)
+      setTxError(writeError.message || '交易失败')
+      
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `❌ **交易失败**\n\n${writeError.message || '发生错误，请重试'}\n\n请确保：\n• 钱包已连接 Monad Testnet\n• 账户有足够的 MON 余额\n• 已确认 MetaMask 签名`,
+        timestamp: new Date(),
+      }
+      
+      setMessages(prev => [...prev, errorMessage])
+      console.error('❌ 批量捐赠失败:', writeError)
+    }
+  }, [writeError])
+  
+  // 更新捐赠状态
+  useEffect(() => {
+    setIsDonating(isWritePending || isConfirming)
+  }, [isWritePending, isConfirming])
+  
+  // 执行真正的链上批量捐赠
   const executeBatchDonation = async () => {
-    setIsDonating(true)
-    await new Promise(r => setTimeout(r, 2000))
-    
-    const selectedItems = batchSelections.filter(s => s.selected)
-    const campaigns = selectedItems.map(s => mockCampaigns.find(c => c.id === s.campaignId)!)
-    
-    const successMessage: Message = {
-      id: Date.now().toString(),
-      role: 'assistant',
-      content: `🎉 批量支持成功！\n\n你已向 ${selectedItems.length} 个女性公益项目支持共计 **${totalAmount} MON**\n\n${campaigns.map((c, i) => `✅ ${c.title} - ${selectedItems[i].amount} MON`).join('\n')}\n\n所有交易已记录在 Monad 区块链上 ⛓️\n感谢你为女性公益贡献力量！🌸`,
-      timestamp: new Date(),
+    if (!isConnected || !address) {
+      setTxError('请先连接钱包')
+      return
     }
     
-    setMessages(prev => [...prev, successMessage])
-    setShowBatchConfirm(false)
-    setBatchSelections([])
-    setIsDonating(false)
+    setIsDonating(true)
+    setTxError(null)
+    resetWrite()
+    
+    try {
+      const selectedItems = batchSelections.filter(s => s.selected)
+      
+      // 从 campaign id 提取数字 ID (例如 "campaign-1" -> 1)
+      const campaignIds = selectedItems.map(s => {
+        const idStr = s.campaignId.replace('campaign-', '')
+        return BigInt(parseInt(idStr) || 1)
+      })
+      
+      // 将 MON 金额转换为 wei (测试模式：除以 1000)
+      const amounts = selectedItems.map(s => parseEther((s.amount / 1000).toString()))
+      
+      // 计算总金额
+      const totalValue = amounts.reduce((sum, a) => sum + a, BigInt(0))
+      
+      console.log('📤 发起批量捐赠（将被记录到链上）:', {
+        钱包地址: address,
+        合约地址: CONTRACT_ADDRESSES.batchDonate,
+        项目数量: campaignIds.length,
+        项目IDs: campaignIds.map(id => id.toString()),
+        各项金额MON: selectedItems.map(s => s.amount),
+        链上金额MON: selectedItems.map(s => (s.amount / 1000).toFixed(4)),
+        总金额Wei: totalValue.toString(),
+      })
+      
+      // 添加等待签名的消息
+      const pendingMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: `⏳ **请在 MetaMask 中确认交易**\n\n正在向 ${selectedItems.length} 个项目发起批量捐赠...\n总金额: ${totalAmount} MON\n\n请在弹出的 MetaMask 窗口中签名确认。`,
+        timestamp: new Date(),
+      }
+      setMessages(prev => [...prev, pendingMessage])
+      
+      // 调用 BatchDonate 合约的 batchDonate 函数
+      writeContract({
+        address: CONTRACT_ADDRESSES.batchDonate as `0x${string}`,
+        abi: BatchDonateABI,
+        functionName: 'batchDonate',
+        args: [campaignIds, amounts],
+        value: totalValue,
+        chain: monadTestnet,
+      })
+    } catch (err) {
+      console.error('捐赠失败:', err)
+      setIsDonating(false)
+      setTxError(err instanceof Error ? err.message : '交易失败')
+    }
   }
 
   const scrollToBottom = () => {
@@ -263,6 +366,12 @@ export function GlobalChatbot() {
     setInput('')
     setIsTyping(true)
 
+    // 检测是否是批量支持模式
+    const isBatchMode = messageText.includes('批量') || 
+                        messageText.includes('多个项目') || 
+                        messageText.includes('同时支持') ||
+                        messageText.includes('一起支持')
+
     // Update conversation history
     const newHistory = [...conversationHistory, { role: 'user' as const, content: messageText }]
     setConversationHistory(newHistory)
@@ -273,8 +382,13 @@ export function GlobalChatbot() {
     // Update conversation history with assistant response
     setConversationHistory(prev => [...prev, { role: 'assistant' as const, content: response.message }])
 
-    // Process the action to get UI data
-    const processedAction = processAction(response.action, isConnected)
+    // Process the action to get UI data - 传入批量模式标志
+    const processedAction = processAction(response.action, isConnected, isBatchMode)
+    
+    // 如果是批量模式，初始化选择列表
+    if (isBatchMode && processedAction?.type === 'batch_select') {
+      initBatchSelections(processedAction.data as Campaign[])
+    }
 
     const assistantMessage: Message = {
       id: (Date.now() + 1).toString(),
@@ -318,7 +432,7 @@ export function GlobalChatbot() {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className={`fixed z-50 transition-all duration-300 ${isMinimized ? 'bottom-6 right-6 w-72' : 'bottom-6 right-6 w-96 h-[600px] max-h-[80vh]'}`}>
+        <div className={`fixed z-50 transition-all duration-300 ${isMinimized ? 'bottom-6 right-6 w-72' : 'bottom-6 right-6 w-[66vw] h-[66vh] max-w-5xl max-h-[80vh]'}`}>
           <Card className="h-full bg-white border-[#E8E2D9] shadow-2xl flex flex-col overflow-hidden rounded-2xl">
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-[#E8E2D9] bg-gradient-to-r from-[#FAF7F2] to-[#F5F2ED]">
@@ -421,11 +535,18 @@ export function GlobalChatbot() {
                                                 <button onClick={() => updateBatchAmount(campaign.id, (selection?.amount || 10) - 5)} className="w-5 h-5 rounded bg-[#E8E2D9] hover:bg-[#D4C8BC] flex items-center justify-center">
                                                   <Minus className="w-3 h-3 text-[#5D4E47]" />
                                                 </button>
-                                                <span className="text-xs text-[#C4866B] font-medium w-12 text-center">{selection?.amount || 10}</span>
+                                                <input
+                                                  type="number"
+                                                  value={selection?.amount || 10}
+                                                  onChange={(e) => updateBatchAmount(campaign.id, Math.max(1, parseInt(e.target.value) || 1))}
+                                                  className="w-16 h-6 text-xs text-center text-[#C4866B] font-medium bg-white border border-[#E8E2D9] rounded focus:border-[#C4866B] focus:outline-none"
+                                                  min="1"
+                                                />
                                                 <button onClick={() => updateBatchAmount(campaign.id, (selection?.amount || 10) + 5)} className="w-5 h-5 rounded bg-[#E8E2D9] hover:bg-[#D4C8BC] flex items-center justify-center">
                                                   <Plus className="w-3 h-3 text-[#5D4E47]" />
                                                 </button>
                                               </div>
+                                              <span className="text-[10px] text-[#B8A99A]">MON</span>
                                             </div>
                                           )}
                                         </div>
@@ -467,17 +588,67 @@ export function GlobalChatbot() {
                                     <span className="text-[#3D3D3D]">总计</span>
                                     <span className="text-[#C4866B]">{totalAmount} MON</span>
                                   </div>
+                                  <div className="flex justify-between text-[10px] text-[#B8A99A] mt-1">
+                                    <span>链上实际金额</span>
+                                    <span>{(totalAmount / 1000).toFixed(4)} MON (测试模式)</span>
+                                  </div>
                                 </div>
-                                <p className="text-[10px] text-[#B8A99A] text-center">利用 Monad 并行执行，{selectedCount} 笔交易将同时完成</p>
+                                
+                                {/* 交易状态 */}
+                                {writeTxHash && isDonating && (
+                                  <div className="p-2 bg-blue-50 rounded-lg">
+                                    <div className="flex items-center gap-2 text-xs text-blue-600">
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                      <span>交易确认中...</span>
+                                    </div>
+                                    <a 
+                                      href={`https://testnet.monadexplorer.com/tx/${writeTxHash}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-[10px] text-blue-500 hover:underline flex items-center gap-1 mt-1"
+                                    >
+                                      查看交易 <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  </div>
+                                )}
+                                
+                                {/* 错误提示 */}
+                                {txError && (
+                                  <div className="p-2 bg-red-50 rounded-lg">
+                                    <div className="text-xs text-red-600">{txError}</div>
+                                  </div>
+                                )}
+                                
+                                <p className="text-[10px] text-[#B8A99A] text-center">
+                                  {isDonating ? '请在 MetaMask 中确认交易' : `利用 Monad 并行执行，${selectedCount} 笔交易将同时完成`}
+                                </p>
                                 <div className="flex gap-2">
-                                  <Button variant="outline" size="sm" onClick={() => setShowBatchConfirm(false)} className="flex-1 border-[#E8E2D9] text-[#5D4E47] h-8 rounded-full" disabled={isDonating}>返回</Button>
-                                  <Button size="sm" onClick={executeBatchDonation} disabled={isDonating} className="flex-1 btn-warm h-8 rounded-full">
-                                    {isDonating ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />处理中...</> : <><CheckCircle className="w-3 h-3 mr-1" />确认</>}
+                                  <Button variant="outline" size="sm" onClick={() => { setShowBatchConfirm(false); setTxError(null); resetWrite(); }} className="flex-1 border-[#E8E2D9] text-[#5D4E47] h-8 rounded-full" disabled={isDonating}>返回</Button>
+                                  <Button size="sm" onClick={executeBatchDonation} disabled={isDonating || !isConnected} className="flex-1 btn-warm h-8 rounded-full">
+                                    {isDonating ? (
+                                      <><Loader2 className="w-3 h-3 mr-1 animate-spin" />{isWritePending ? '等待签名...' : '确认中...'}</>
+                                    ) : (
+                                      <><Heart className="w-3 h-3 mr-1" fill="white" />确认支持</>
+                                    )}
                                   </Button>
                                 </div>
                               </div>
                             )}
                             
+                            {message.action.type === 'track_donations' && (
+                              <div className="p-3 bg-white rounded-xl border border-[#E8E2D9]">
+                                <div className="text-xs text-[#8A7B73] mb-2">
+                                  捐赠记录已在链上生成，请前往「我的捐赠」查看真实数据。
+                                </div>
+                                <Button
+                                  size="sm"
+                                  onClick={() => window.location.href = '/dashboard/donor'}
+                                  className="w-full btn-warm rounded-full"
+                                >
+                                  查看我的捐赠记录
+                                </Button>
+                              </div>
+                            )}
                             {message.action.type === 'connect_wallet' && (
                               <div className="p-3 bg-white rounded-xl text-center border border-[#E8E2D9]">
                                 <ConnectButton.Custom>

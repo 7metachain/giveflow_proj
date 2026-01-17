@@ -23,6 +23,7 @@ import {
   Calendar,
   Brain,
   Sparkles,
+  AlertCircle,
 } from 'lucide-react'
 import {
   getCampaignById,
@@ -33,15 +34,50 @@ import {
   getCategoryStyle,
   getCategoryImage,
 } from '@/lib/mock-data'
-import { useAccount } from 'wagmi'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { parseEther } from 'viem'
+import { CampaignRegistryABI, BatchDonateABI } from '@/lib/contracts'
+import { CONTRACT_ADDRESSES, monadTestnet } from '@/lib/web3'
 
 export default function CampaignDetailPage() {
   const params = useParams()
-  const { isConnected } = useAccount()
+  const { isConnected, address } = useAccount()
   const [donateAmount, setDonateAmount] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [txError, setTxError] = useState<string | null>(null)
+  const [txSuccess, setTxSuccess] = useState(false)
+
+  // 合约交互 hooks
+  const { writeContract, data: txHash, isPending, error: writeError, reset } = useWriteContract()
+  
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash: txHash,
+  })
+  
+  // 监听交易成功
+  useEffect(() => {
+    if (isSuccess && txHash) {
+      setIsLoading(false)
+      setTxSuccess(true)
+      setDonateAmount('')
+      setTimeout(() => setTxSuccess(false), 5000)
+    }
+  }, [isSuccess, txHash])
+  
+  // 监听交易错误
+  useEffect(() => {
+    if (writeError) {
+      setIsLoading(false)
+      setTxError(writeError.message || '交易失败，请重试')
+    }
+  }, [writeError])
+  
+  // 更新加载状态
+  useEffect(() => {
+    setIsLoading(isPending || isConfirming)
+  }, [isPending, isConfirming])
 
   const campaign = getCampaignById(params.id as string)
   const donations = getDonationsByCampaign(params.id as string)
@@ -73,11 +109,41 @@ export default function CampaignDetailPage() {
 
   const handleDonate = async () => {
     if (!donateAmount || parseFloat(donateAmount) <= 0) return
+    
     setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setIsLoading(false)
-    setDonateAmount('')
-    alert('支持成功！感谢你的爱心 🌸')
+    setTxError(null)
+    setTxSuccess(false)
+    reset()
+    
+    try {
+      // 从 campaign id 提取数字 ID (例如 "campaign-1" -> 1)
+      const campaignIdStr = campaign.id.replace('campaign-', '')
+      const campaignId = BigInt(parseInt(campaignIdStr) || 1)
+      
+      // 转换金额 (测试模式：除以 1000 以节省测试币)
+      const donationValue = parseEther((parseFloat(donateAmount) / 1000).toString())
+      
+      console.log('📤 发起单次捐赠（通过 BatchDonate）:', {
+        contract: CONTRACT_ADDRESSES.batchDonate,
+        campaignId: campaignId.toString(),
+        amount: donationValue.toString(),
+      })
+      
+      // 使用 BatchDonate 合约进行单次捐赠（这样会被记录到捐赠历史）
+      // 即使只捐一个项目，也使用批量捐赠接口，以便统一记录
+      writeContract({
+        address: CONTRACT_ADDRESSES.batchDonate as `0x${string}`,
+        abi: BatchDonateABI,
+        functionName: 'batchDonate',
+        args: [[campaignId], [donationValue]],
+        value: donationValue,
+        chain: monadTestnet,
+      })
+    } catch (err) {
+      console.error('捐赠失败:', err)
+      setIsLoading(false)
+      setTxError(err instanceof Error ? err.message : '交易失败，请重试')
+    }
   }
 
   return (
@@ -482,6 +548,9 @@ export default function CampaignDetailPage() {
                         onChange={(e) => setDonateAmount(e.target.value)}
                         className="bg-[#FBF8F4] border-[#E5DDD4] text-[#2D2420] focus:border-[#D4785C] h-12 text-lg"
                       />
+                      <div className="text-xs text-[#8B7B6E] mt-1">
+                        实际链上金额: {donateAmount ? (parseFloat(donateAmount) / 1000).toFixed(4) : '0'} MON (测试模式)
+                      </div>
                       <div className="flex gap-2 mt-3">
                         {[10, 50, 100, 500].map((amount) => (
                           <Button
@@ -496,6 +565,60 @@ export default function CampaignDetailPage() {
                         ))}
                       </div>
                     </div>
+                    
+                    {/* 成功提示 */}
+                    {txSuccess && txHash && (
+                      <div className="mb-4 p-3 bg-[#7BA089]/10 rounded-xl border border-[#7BA089]/30">
+                        <div className="flex items-center gap-2 text-[#7BA089] text-sm font-medium">
+                          <CheckCircle className="w-4 h-4" />
+                          支持成功！感谢你的爱心 🌸
+                        </div>
+                        <a 
+                          href={`https://testnet.monadexplorer.com/tx/${txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-[#7BA089] hover:underline flex items-center gap-1 mt-1"
+                        >
+                          查看交易 <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    )}
+                    
+                    {/* 错误提示 */}
+                    {txError && (
+                      <div className="mb-4 p-3 bg-red-50 rounded-xl border border-red-200">
+                        <div className="flex items-center gap-2 text-red-600 text-sm">
+                          <AlertCircle className="w-4 h-4" />
+                          {txError}
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setTxError(null)}
+                          className="text-xs text-red-500 mt-1 p-0 h-auto"
+                        >
+                          关闭
+                        </Button>
+                      </div>
+                    )}
+                    
+                    {/* 交易中提示 */}
+                    {txHash && isLoading && (
+                      <div className="mb-4 p-3 bg-blue-50 rounded-xl border border-blue-200">
+                        <div className="flex items-center gap-2 text-blue-600 text-sm">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          交易确认中...
+                        </div>
+                        <a 
+                          href={`https://testnet.monadexplorer.com/tx/${txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-500 hover:underline flex items-center gap-1 mt-1"
+                        >
+                          查看交易 <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    )}
 
                     <Button
                       onClick={handleDonate}
@@ -505,7 +628,7 @@ export default function CampaignDetailPage() {
                       {isLoading ? (
                         <>
                           <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                          处理中...
+                          {isPending ? '等待签名...' : '确认中...'}
                         </>
                       ) : (
                         <>

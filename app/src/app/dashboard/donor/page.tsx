@@ -15,25 +15,99 @@ import {
   FileCheck,
   DollarSign,
   Gift,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react'
 import Link from 'next/link'
-import { useAccount } from 'wagmi'
+import { useAccount, useReadContract } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
+import { formatEther } from 'viem'
 import {
   mockCampaigns,
-  mockDonations,
   formatAmount,
   formatDate,
   shortenAddress,
   getCategoryStyle,
 } from '@/lib/mock-data'
+import { BatchDonateABI } from '@/lib/contracts'
+import { CONTRACT_ADDRESSES, monadTestnet } from '@/lib/web3'
+import { useState, useEffect } from 'react'
+
+// 链上捐赠记录类型
+interface OnChainDonation {
+  campaignId: bigint
+  amount: bigint
+  timestamp: bigint
+}
 
 export default function DonorDashboardPage() {
   const { address, isConnected } = useAccount()
-
-  const myDonations = mockDonations.slice(0, 3)
-  const totalDonated = myDonations.reduce((sum, d) => sum + d.amount, 0)
-  const projectsSupported = new Set(myDonations.map((d) => d.campaignId)).size
+  
+  // 从 BatchDonate 合约读取捐赠历史
+  const { data: donorHistory, isLoading: isLoadingHistory, refetch: refetchHistory } = useReadContract({
+    address: CONTRACT_ADDRESSES.batchDonate as `0x${string}`,
+    abi: BatchDonateABI,
+    functionName: 'getDonorHistory',
+    args: address ? [address] : undefined,
+    chainId: monadTestnet.id,
+    query: {
+      enabled: !!address,
+    },
+  })
+  
+  // 从 BatchDonate 合约读取总捐赠金额
+  const { data: donorTotalAmount, isLoading: isLoadingTotal, refetch: refetchTotal } = useReadContract({
+    address: CONTRACT_ADDRESSES.batchDonate as `0x${string}`,
+    abi: BatchDonateABI,
+    functionName: 'getDonorTotalAmount',
+    args: address ? [address] : undefined,
+    chainId: monadTestnet.id,
+    query: {
+      enabled: !!address,
+    },
+  })
+  
+  // 刷新数据
+  const handleRefresh = () => {
+    refetchHistory()
+    refetchTotal()
+  }
+  
+  // 处理链上数据
+  const onChainDonations = (donorHistory as OnChainDonation[] | undefined) || []
+  const chainTotalDonated = donorTotalAmount ? Number(formatEther(donorTotalAmount as bigint)) : 0
+  
+  // 调试信息 - 详细输出
+  useEffect(() => {
+    if (address) {
+      console.log('📊 链上捐赠数据详情:', {
+        钱包地址: address,
+        合约地址: CONTRACT_ADDRESSES.batchDonate,
+        原始数据: donorHistory,
+        已处理数据: onChainDonations,
+        数据长度: onChainDonations.length,
+        总金额Wei: donorTotalAmount?.toString(),
+        总金额ETH: chainTotalDonated,
+        是否加载中: isLoadingHistory || isLoadingTotal,
+      })
+    }
+  }, [address, donorHistory, donorTotalAmount, onChainDonations, chainTotalDonated, isLoadingHistory, isLoadingTotal])
+  
+  // ⚠️ 只使用链上数据，不再使用 mock 数据
+  // 注意：mockCampaigns 的 id 是 '1', '2' 等，链上数据是 1n, 2n 等
+  const displayDonations = onChainDonations.map((d, index) => ({
+    id: `chain-${index}`,
+    campaignId: d.campaignId.toString(), // 直接使用数字字符串，与 mockCampaigns 的 id 匹配
+    amount: Number(formatEther(d.amount)) * 1000, // 还原显示金额（测试模式除以了1000）
+    timestamp: new Date(Number(d.timestamp) * 1000).toISOString(),
+    txHash: '0x...' // 链上记录没有保存完整的 txHash
+  }))
+  
+  const totalDonated = chainTotalDonated * 1000 // 还原显示金额
+  
+  const projectsSupported = new Set(displayDonations.map((d) => d.campaignId)).size
+  
+  const isLoading = isLoadingHistory || isLoadingTotal
 
   if (!isConnected) {
     return (
@@ -80,9 +154,9 @@ export default function DonorDashboardPage() {
         {/* Stats Cards */}
         <div className="grid md:grid-cols-4 gap-4 mb-8">
           {[
-            { icon: DollarSign, label: '累计支持', value: `$${totalDonated}`, color: '#C4866B' },
-            { icon: Gift, label: '支持次数', value: myDonations.length, color: '#A8B5A0' },
-            { icon: Heart, label: '支持项目', value: projectsSupported, color: '#D4A59A' },
+            { icon: DollarSign, label: '累计支持', value: isLoading ? '...' : `${totalDonated.toFixed(0)} MON`, color: '#C4866B' },
+            { icon: Gift, label: '支持次数', value: isLoading ? '...' : displayDonations.length, color: '#A8B5A0' },
+            { icon: Heart, label: '支持项目', value: isLoading ? '...' : projectsSupported, color: '#D4A59A' },
             { icon: TrendingUp, label: '透明度', value: '100%', color: '#8FA584' },
           ].map((stat) => (
             <Card key={stat.label} className="warm-card card-shadow">
@@ -110,52 +184,145 @@ export default function DonorDashboardPage() {
             {/* Donation History */}
             <Card className="warm-card card-shadow">
               <CardHeader>
-                <CardTitle className="text-[#3D3D3D] flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-[#C4866B]" />
-                  支持记录
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-[#3D3D3D] flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-[#C4866B]" />
+                    支持记录
+                    {onChainDonations.length > 0 && (
+                      <Badge className="badge-sage text-xs ml-2">链上数据</Badge>
+                    )}
+                  </CardTitle>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={handleRefresh}
+                    disabled={isLoading}
+                    className="text-[#B8A99A] hover:text-[#C4866B]"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {myDonations.map((donation) => {
-                  const campaign = mockCampaigns.find((c) => c.id === donation.campaignId)
-                  const style = campaign ? getCategoryStyle(campaign.category) : null
-                  return (
-                    <div
-                      key={donation.id}
-                      className="flex items-center justify-between p-4 bg-[#FAF7F2] rounded-xl border border-[#E8E2D9] hover:bg-[#F5F2ED] transition-colors"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#C4866B]/20 to-[#D4A59A]/20 flex items-center justify-center">
-                          <Heart className="w-6 h-6 text-[#C4866B]" fill="currentColor" />
+                {isLoading ? (
+                  <div className="text-center py-10">
+                    <Loader2 className="w-8 h-8 animate-spin text-[#C4866B] mx-auto mb-4" />
+                    <p className="text-[#8A7B73]">加载链上数据...</p>
+                  </div>
+                ) : (
+                  <>
+                    {displayDonations.map((donation, index) => {
+                      const campaign = mockCampaigns.find((c) => c.id === donation.campaignId)
+                      const style = campaign ? getCategoryStyle(campaign.category) : null
+                      const isOnChain = donation.id.startsWith('chain-')
+                      
+                      // 根据 campaignId 获取项目名称
+                      const getProjectName = () => {
+                        if (campaign?.title) return campaign.title
+                        // 根据 ID 返回对应项目名称
+                        const nameMap: Record<string, string> = {
+                          '1': '农村女性宫颈癌筛查计划',
+                          '2': '女性心理健康热线',
+                          '3': '山区女孩编程夏令营',
+                          '4': '乡村女教师成长计划',
+                          '5': '单亲妈妈职业技能培训',
+                        }
+                        return nameMap[donation.campaignId] || `项目 #${donation.campaignId}`
+                      }
+                      
+                      return (
+                        <div
+                          key={donation.id}
+                          className="flex items-center justify-between p-4 bg-[#FAF7F2] rounded-xl border border-[#E8E2D9] hover:bg-[#F5F2ED] transition-colors"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#C4866B]/20 to-[#D4A59A]/20 flex items-center justify-center">
+                              <Heart className="w-6 h-6 text-[#C4866B]" fill="currentColor" />
+                            </div>
+                            <div>
+                              <div className="text-[#3D3D3D] font-medium flex items-center gap-2">
+                                {getProjectName()}
+                                {isOnChain && (
+                                  <Badge className="badge-sage text-xs">✓</Badge>
+                                )}
+                              </div>
+                              <div className="text-sm text-[#B8A99A]">
+                                {formatDate(donation.timestamp)}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-[#C4866B] font-bold">{donation.amount} MON</div>
+                            {isOnChain ? (
+                              <a 
+                                href={`https://testnet.monadexplorer.com/address/${address}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-[#B8A99A] hover:text-[#C4866B] flex items-center gap-1 justify-end"
+                              >
+                                查看链上记录
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            ) : (
+                              <a href="#" className="text-xs text-[#B8A99A] hover:text-[#C4866B] flex items-center gap-1 justify-end">
+                                {shortenAddress(donation.txHash)}
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-[#3D3D3D] font-medium">
-                            {campaign?.title || '未知项目'}
-                          </div>
-                          <div className="text-sm text-[#B8A99A]">
-                            {formatDate(donation.timestamp)}
-                          </div>
+                      )
+                    })}
+
+                    {displayDonations.length === 0 && !isLoading && (
+                      <div className="text-center py-10">
+                        <div className="text-5xl mb-4">🌸</div>
+                        <p className="text-[#8A7B73] mb-2">还没有链上支持记录</p>
+                        <p className="text-xs text-[#B8A99A] mb-4">
+                          当前钱包: {address ? shortenAddress(address) : '未连接'}
+                        </p>
+                        <div className="flex gap-2 justify-center">
+                          <Link href="/campaigns">
+                            <Button className="btn-warm rounded-full">开始支持</Button>
+                          </Link>
+                          <Button 
+                            variant="outline" 
+                            onClick={handleRefresh}
+                            className="border-[#E8E2D9] text-[#5D4E47] rounded-full"
+                          >
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            刷新数据
+                          </Button>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-[#C4866B] font-bold">${donation.amount}</div>
-                        <a href="#" className="text-xs text-[#B8A99A] hover:text-[#C4866B] flex items-center gap-1 justify-end">
-                          {shortenAddress(donation.txHash)}
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
+                    )}
+                    
+                    {/* 链上数据状态提示 */}
+                    <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-200">
+                      <div className="flex items-start gap-2 text-sm text-blue-700">
+                        <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <div className="font-medium mb-1">
+                            {onChainDonations.length > 0 ? '✅ 显示链上真实数据' : '📝 等待链上数据'}
+                          </div>
+                          <div className="text-xs text-blue-600 space-y-1">
+                            <div>合约地址: {CONTRACT_ADDRESSES.batchDonate}</div>
+                            <div>钱包地址: {address ? shortenAddress(address) : '未连接'}</div>
+                            <div>捐赠记录数: {onChainDonations.length}</div>
+                            {onChainDonations.length === 0 && (
+                              <p className="mt-2 text-blue-700">
+                                💡 进行一次捐赠（项目详情页或批量支持），然后点击右上角刷新按钮
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  )
-                })}
-
-                {myDonations.length === 0 && (
-                  <div className="text-center py-10">
-                    <div className="text-5xl mb-4">🌸</div>
-                    <p className="text-[#8A7B73]">还没有支持记录</p>
-                    <Link href="/campaigns">
-                      <Button className="mt-4 btn-warm rounded-full">开始支持</Button>
-                    </Link>
-                  </div>
+                  </>
                 )}
               </CardContent>
             </Card>
