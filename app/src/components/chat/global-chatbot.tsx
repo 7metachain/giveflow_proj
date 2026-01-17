@@ -29,7 +29,7 @@ import {
   ListChecks,
   ExternalLink,
 } from 'lucide-react'
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useAccount, useSendTransaction, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
 import { parseEther, formatEther } from 'viem'
 import { useUser, type UserRole } from '@/lib/user-context'
@@ -195,12 +195,28 @@ export function GlobalChatbot() {
   const [isDonating, setIsDonating] = useState(false)
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
   const [txError, setTxError] = useState<string | null>(null)
+  const [isEnterprise, setIsEnterprise] = useState(false)
+  const [paymentRequirement, setPaymentRequirement] = useState<{
+    serviceId: string
+    price: string
+    amountWei: string
+    recipient: string
+  } | null>(null)
+  const [paymentTxHash, setPaymentTxHash] = useState<`0x${string}` | undefined>()
+  const [isPaymentVerified, setIsPaymentVerified] = useState(false)
+  const [isPayingFee, setIsPayingFee] = useState(false)
 
   // 合约交互 hooks
   const { writeContract, data: writeTxHash, isPending: isWritePending, error: writeError, reset: resetWrite } = useWriteContract()
+
+  const { sendTransaction, data: feeTxHash, error: feeError } = useSendTransaction()
   
   const { isLoading: isConfirming, isSuccess: isTxSuccess } = useWaitForTransactionReceipt({
     hash: writeTxHash,
+  })
+
+  const { isLoading: isFeeConfirming, isSuccess: isFeeSuccess } = useWaitForTransactionReceipt({
+    hash: feeTxHash,
   })
 
   // Conversation history for AI
@@ -226,6 +242,21 @@ export function GlobalChatbot() {
   
   const selectedCount = batchSelections.filter(s => s.selected).length
   const totalAmount = batchSelections.filter(s => s.selected).reduce((sum, s) => sum + s.amount, 0)
+
+  // Reset enterprise payment state when selection changes
+  useEffect(() => {
+    setPaymentRequirement(null)
+    setPaymentTxHash(undefined)
+    setIsPaymentVerified(false)
+  }, [selectedCount, totalAmount])
+
+  useEffect(() => {
+    if (!isEnterprise) {
+      setPaymentRequirement(null)
+      setPaymentTxHash(undefined)
+      setIsPaymentVerified(false)
+    }
+  }, [isEnterprise])
   
   // 监听交易成功
   useEffect(() => {
@@ -276,6 +307,26 @@ export function GlobalChatbot() {
   useEffect(() => {
     setIsDonating(isWritePending || isConfirming)
   }, [isWritePending, isConfirming])
+
+  // 监听服务费支付确认
+  useEffect(() => {
+    if (feeError) {
+      setIsPayingFee(false)
+      setTxError(feeError.message || '服务费支付失败')
+    }
+  }, [feeError])
+
+  useEffect(() => {
+    if (isFeeConfirming) {
+      setIsPayingFee(true)
+    }
+  }, [isFeeConfirming])
+
+  useEffect(() => {
+    if (isFeeSuccess && feeTxHash) {
+      setPaymentTxHash(feeTxHash)
+    }
+  }, [isFeeSuccess, feeTxHash])
   
   // 执行真正的链上批量捐赠
   const executeBatchDonation = async () => {
@@ -337,6 +388,87 @@ export function GlobalChatbot() {
       setTxError(err instanceof Error ? err.message : '交易失败')
     }
   }
+
+  const requestEnterprisePayment = async () => {
+    const selectedItems = batchSelections.filter(s => s.selected)
+    const payload = {
+      donations: selectedItems.map(s => ({
+        campaignId: s.campaignId,
+        amount: s.amount,
+      })),
+      payer: address,
+    }
+
+    const response = await fetch('/api/enterprise/batch-donate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+
+    if (response.status === 402) {
+      const data = await response.json()
+      setPaymentRequirement(data.payment)
+      return
+    }
+
+    if (!response.ok) {
+      throw new Error('企业捐赠付费请求失败')
+    }
+  }
+
+  const verifyEnterprisePayment = async (hash: `0x${string}`) => {
+    const response = await fetch('/api/enterprise/batch-donate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Payment-Id': hash,
+      },
+      body: JSON.stringify({ payer: address }),
+    })
+
+    if (!response.ok) {
+      throw new Error('服务费验证失败')
+    }
+
+    const result = await response.json()
+    if (result.ok) {
+      setIsPaymentVerified(true)
+      setIsPayingFee(false)
+    }
+  }
+
+  const handleEnterpriseConfirm = async () => {
+    if (!isEnterprise) {
+      await executeBatchDonation()
+      return
+    }
+
+    if (!paymentRequirement) {
+      await requestEnterprisePayment()
+      return
+    }
+
+    if (!isPaymentVerified && paymentRequirement) {
+      setIsPayingFee(true)
+      sendTransaction({
+        to: paymentRequirement.recipient as `0x${string}`,
+        value: BigInt(paymentRequirement.amountWei),
+        chainId: monadTestnet.id,
+      })
+      return
+    }
+
+    await executeBatchDonation()
+  }
+
+  useEffect(() => {
+    if (paymentTxHash && !isPaymentVerified) {
+      verifyEnterprisePayment(paymentTxHash).catch((err) => {
+        setTxError(err.message || '服务费验证失败')
+        setIsPayingFee(false)
+      })
+    }
+  }, [paymentTxHash, isPaymentVerified])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -619,16 +751,47 @@ export function GlobalChatbot() {
                                   </div>
                                 )}
                                 
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between text-[10px] text-[#B8A99A]">
+                                    <span>企业捐赠方案（x402）</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setIsEnterprise(!isEnterprise)}
+                                      className={`w-9 h-5 rounded-full transition-colors ${isEnterprise ? 'bg-[#C4866B]' : 'bg-[#E8E2D9]'}`}
+                                    >
+                                      <span className={`block w-4 h-4 bg-white rounded-full transition-transform ${isEnterprise ? 'translate-x-4' : 'translate-x-1'}`} />
+                                    </button>
+                                  </div>
+                                  {isEnterprise && (
+                                    <div className="text-[10px] text-[#8A7B73] bg-[#FAF7F2] rounded-lg p-2 border border-[#E8E2D9]">
+                                      该方案需要支付一次性服务费（x402），支付后可进行企业批量捐赠。
+                                      {paymentRequirement && (
+                                        <div className="mt-1 text-[#C4866B]">
+                                          服务费：{paymentRequirement.price}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  {paymentRequirement && (
+                                    <div className="text-[10px] text-[#5D4E47] bg-white rounded-lg p-2 border border-[#E8E2D9]">
+                                      收款地址：{paymentRequirement.recipient.slice(0, 6)}...{paymentRequirement.recipient.slice(-4)}
+                                    </div>
+                                  )}
+                                </div>
                                 <p className="text-[10px] text-[#B8A99A] text-center">
-                                  {isDonating ? '请在 MetaMask 中确认交易' : `利用 Monad 并行执行，${selectedCount} 笔交易将同时完成`}
+                                  {isDonating
+                                    ? '请在 MetaMask 中确认交易'
+                                    : isEnterprise && !isPaymentVerified
+                                    ? '企业捐赠需先支付服务费'
+                                    : `利用 Monad 并行执行，${selectedCount} 笔交易将同时完成`}
                                 </p>
                                 <div className="flex gap-2">
                                   <Button variant="outline" size="sm" onClick={() => { setShowBatchConfirm(false); setTxError(null); resetWrite(); }} className="flex-1 border-[#E8E2D9] text-[#5D4E47] h-8 rounded-full" disabled={isDonating}>返回</Button>
-                                  <Button size="sm" onClick={executeBatchDonation} disabled={isDonating || !isConnected} className="flex-1 btn-warm h-8 rounded-full">
-                                    {isDonating ? (
-                                      <><Loader2 className="w-3 h-3 mr-1 animate-spin" />{isWritePending ? '等待签名...' : '确认中...'}</>
+                                  <Button size="sm" onClick={handleEnterpriseConfirm} disabled={isDonating || !isConnected || isPayingFee} className="flex-1 btn-warm h-8 rounded-full">
+                                    {isDonating || isPayingFee ? (
+                                      <><Loader2 className="w-3 h-3 mr-1 animate-spin" />{isPayingFee ? '支付服务费...' : (isWritePending ? '等待签名...' : '确认中...')}</>
                                     ) : (
-                                      <><Heart className="w-3 h-3 mr-1" fill="white" />确认支持</>
+                                      <><Heart className="w-3 h-3 mr-1" fill="white" />{isEnterprise && !isPaymentVerified ? '支付服务费' : '确认支持'}</>
                                     )}
                                   </Button>
                                 </div>

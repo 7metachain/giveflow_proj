@@ -23,17 +23,30 @@ import {
   RefreshCw,
   Eye,
 } from 'lucide-react'
-import type { AIReviewResult } from '@/lib/mock-data'
+import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
+import { decodeEventLog, keccak256, parseEther, toHex, toBytes } from 'viem'
+import { ProofRegistryABI, MilestoneVaultABI } from '@/lib/contracts'
+import { CONTRACT_ADDRESSES, monadTestnet } from '@/lib/web3'
 
-type ReviewStatus = 'idle' | 'uploading' | 'analyzing' | 'complete'
+type ReviewStatus = 'idle' | 'submitting' | 'reviewing' | 'withdrawing' | 'complete' | 'error'
 
 export default function ProofUploadPage() {
+  const { address, isConnected } = useAccount()
+  const publicClient = usePublicClient()
+  const { writeContractAsync } = useWriteContract()
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [reviewStatus, setReviewStatus] = useState<ReviewStatus>('idle')
   const [reviewProgress, setReviewProgress] = useState(0)
-  const [reviewResult, setReviewResult] = useState<AIReviewResult | null>(null)
   const [requestAmount, setRequestAmount] = useState('3000')
+  const [campaignId, setCampaignId] = useState('1')
+  const [milestoneId, setMilestoneId] = useState('1')
+  const [proofId, setProofId] = useState<bigint | null>(null)
+  const [submitTxHash, setSubmitTxHash] = useState<`0x${string}` | null>(null)
+  const [reviewTxHash, setReviewTxHash] = useState<`0x${string}` | null>(null)
+  const [withdrawTxHash, setWithdrawTxHash] = useState<`0x${string}` | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
@@ -53,54 +66,96 @@ export default function ProofUploadPage() {
   }
 
   const startAIReview = async () => {
-    if (!selectedFile) return
+    if (!selectedFile || !publicClient || !writeContractAsync) return
+    if (!isConnected || !address) {
+      setErrorMessage('请先连接钱包')
+      return
+    }
 
-    setReviewStatus('uploading')
+    setErrorMessage(null)
     setReviewProgress(0)
+    setReviewStatus('submitting')
 
-    for (let i = 0; i <= 30; i += 5) {
-      await new Promise((r) => setTimeout(r, 100))
-      setReviewProgress(i)
+    try {
+      const fileBuffer = await selectedFile.arrayBuffer()
+      const proofHash = keccak256(toHex(new Uint8Array(fileBuffer)))
+      const ipfsUri = `ipfs://local/${Date.now()}-${selectedFile.name}`
+      const amountWei = parseEther(requestAmount)
+
+      const submitHash = await writeContractAsync({
+        address: CONTRACT_ADDRESSES.proofRegistry as `0x${string}`,
+        abi: ProofRegistryABI,
+        functionName: 'submitProof',
+        args: [
+          BigInt(campaignId),
+          BigInt(milestoneId),
+          proofHash,
+          amountWei,
+          ipfsUri,
+        ],
+        chainId: monadTestnet.id,
+      })
+      setSubmitTxHash(submitHash)
+      setReviewProgress(30)
+
+      const submitReceipt = await publicClient.waitForTransactionReceipt({ hash: submitHash })
+      let newProofId: bigint | null = null
+
+      for (const log of submitReceipt.logs) {
+        try {
+          const decoded = decodeEventLog({
+            abi: ProofRegistryABI,
+            data: log.data,
+            topics: log.topics,
+          })
+          if (decoded.eventName === 'ProofSubmitted') {
+            newProofId = decoded.args.proofId as bigint
+            break
+          }
+        } catch {
+          // skip non-matching logs
+        }
+      }
+
+      if (!newProofId) {
+        throw new Error('未获取到 Proof ID，请检查合约事件')
+      }
+      setProofId(newProofId)
+
+      setReviewStatus('reviewing')
+      setReviewProgress(60)
+
+      const aiReportHash = keccak256(toBytes(`auto-approve-${submitHash}`))
+      const reviewHash = await writeContractAsync({
+        address: CONTRACT_ADDRESSES.proofRegistry as `0x${string}`,
+        abi: ProofRegistryABI,
+        functionName: 'recordAIReview',
+        args: [newProofId, 1, BigInt(9500), aiReportHash],
+        chainId: monadTestnet.id,
+      })
+      setReviewTxHash(reviewHash)
+      await publicClient.waitForTransactionReceipt({ hash: reviewHash })
+
+      setReviewStatus('withdrawing')
+      setReviewProgress(85)
+
+      const withdrawHash = await writeContractAsync({
+        address: CONTRACT_ADDRESSES.milestoneVault as `0x${string}`,
+        abi: MilestoneVaultABI,
+        functionName: 'withdrawWithProof',
+        args: [BigInt(campaignId), BigInt(milestoneId), newProofId],
+        chainId: monadTestnet.id,
+      })
+      setWithdrawTxHash(withdrawHash)
+      await publicClient.waitForTransactionReceipt({ hash: withdrawHash })
+
+      setReviewProgress(100)
+      setReviewStatus('complete')
+    } catch (error) {
+      console.error('On-chain review error:', error)
+      setReviewStatus('error')
+      setErrorMessage(error instanceof Error ? error.message : '链上处理失败')
     }
-
-    setReviewStatus('analyzing')
-
-    const analysisSteps = [
-      { progress: 40, delay: 500 },
-      { progress: 55, delay: 700 },
-      { progress: 70, delay: 600 },
-      { progress: 85, delay: 800 },
-      { progress: 95, delay: 500 },
-      { progress: 100, delay: 300 },
-    ]
-
-    for (const step of analysisSteps) {
-      await new Promise((r) => setTimeout(r, step.delay))
-      setReviewProgress(step.progress)
-    }
-
-    const mockResult: AIReviewResult = {
-      status: 'approved',
-      confidence: 0.94,
-      extracted: {
-        amount: parseInt(requestAmount),
-        date: '2026-01-15',
-        recipient: '乡村医疗服务中心',
-        purpose: '女性健康筛查物资采购',
-      },
-      checks: {
-        amountMatch: true,
-        dateValid: true,
-        formatValid: true,
-        authenticityScore: 0.92,
-        purposeMatch: true,
-      },
-      reason:
-        '凭证真实有效。OCR 识别金额与申请金额一致，日期在有效期内，收款方为认证机构，用途与项目里程碑描述匹配。建议批准该提款申请。',
-    }
-
-    setReviewResult(mockResult)
-    setReviewStatus('complete')
   }
 
   const resetForm = () => {
@@ -108,50 +163,27 @@ export default function ProofUploadPage() {
     setPreviewUrl(null)
     setReviewStatus('idle')
     setReviewProgress(0)
-    setReviewResult(null)
+    setErrorMessage(null)
+    setProofId(null)
+    setSubmitTxHash(null)
+    setReviewTxHash(null)
+    setWithdrawTxHash(null)
   }
 
-  const getStatusColor = (status: 'approved' | 'rejected' | 'manual_review') => {
-    switch (status) {
-      case 'approved':
-        return 'text-[#8FA584]'
-      case 'rejected':
-        return 'text-[#C97065]'
-      case 'manual_review':
-        return 'text-[#C4866B]'
-    }
-  }
-
-  const getStatusBadge = (status: 'approved' | 'rejected' | 'manual_review') => {
-    switch (status) {
-      case 'approved':
-        return 'badge-sage'
-      case 'rejected':
-        return 'bg-[#C97065]/10 text-[#C97065] border-[#C97065]/20'
-      case 'manual_review':
-        return 'badge-terracotta'
-    }
-  }
-
-  const getStatusIcon = (status: 'approved' | 'rejected' | 'manual_review') => {
-    switch (status) {
-      case 'approved':
-        return <CheckCircle className="w-5 h-5" />
-      case 'rejected':
-        return <XCircle className="w-5 h-5" />
-      case 'manual_review':
-        return <AlertTriangle className="w-5 h-5" />
-    }
-  }
-
-  const getStatusText = (status: 'approved' | 'rejected' | 'manual_review') => {
-    switch (status) {
-      case 'approved':
-        return 'AI 审核通过'
-      case 'rejected':
-        return 'AI 审核未通过'
-      case 'manual_review':
-        return '需要人工复核'
+  const getStatusText = () => {
+    switch (reviewStatus) {
+      case 'submitting':
+        return '正在提交凭证上链'
+      case 'reviewing':
+        return 'AI 审核上链'
+      case 'withdrawing':
+        return '执行资金释放'
+      case 'complete':
+        return '链上流程完成'
+      case 'error':
+        return '链上处理失败'
+      default:
+        return '等待操作'
     }
   }
 
@@ -223,6 +255,36 @@ export default function ProofUploadPage() {
                   )}
                 </div>
 
+                {/* Campaign & Milestone */}
+                {previewUrl && (
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-[#5D4E47] mb-2">
+                        项目 ID
+                      </label>
+                      <Input
+                        type="number"
+                        value={campaignId}
+                        onChange={(e) => setCampaignId(e.target.value)}
+                        className="bg-[#FAF7F2] border-[#E8E2D9] text-[#3D3D3D] focus:border-[#C4866B]"
+                        placeholder="输入项目ID"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-[#5D4E47] mb-2">
+                        里程碑 ID
+                      </label>
+                      <Input
+                        type="number"
+                        value={milestoneId}
+                        onChange={(e) => setMilestoneId(e.target.value)}
+                        className="bg-[#FAF7F2] border-[#E8E2D9] text-[#3D3D3D] focus:border-[#C4866B]"
+                        placeholder="输入里程碑ID"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Request Amount */}
                 {previewUrl && (
                   <div className="mt-6">
@@ -245,34 +307,32 @@ export default function ProofUploadPage() {
                         {reviewStatus === 'idle' ? (
                           <>
                             <Brain className="w-4 h-4 mr-2" />
-                            开始审核
+                            一键通过并提款
                           </>
                         ) : (
                           <>
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            审核中...
+                            链上处理中...
                           </>
                         )}
                       </Button>
                     </div>
+                    <p className="text-xs text-[#B8A99A] mt-2">
+                      当前流程将直接上链：提交凭证 → 自动审核通过 → 资金释放
+                    </p>
                   </div>
                 )}
 
                 {/* Progress */}
-                {(reviewStatus === 'uploading' || reviewStatus === 'analyzing') && (
+                {['submitting', 'reviewing', 'withdrawing'].includes(reviewStatus) && (
                   <div className="mt-6 p-4 bg-[#FAF7F2] rounded-xl border border-[#E8E2D9]">
                     <div className="flex items-center gap-3 mb-3">
-                      {reviewStatus === 'uploading' ? (
-                        <>
-                          <Upload className="w-5 h-5 text-[#C4866B] animate-pulse" />
-                          <span className="text-[#5D4E47]">正在上传凭证...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Brain className="w-5 h-5 text-[#8FA584] animate-pulse" />
-                          <span className="text-[#5D4E47]">AI 正在智能分析...</span>
-                        </>
-                      )}
+                      <Brain className="w-5 h-5 text-[#8FA584] animate-pulse" />
+                      <span className="text-[#5D4E47]">
+                        {reviewStatus === 'submitting' && '正在提交凭证上链...'}
+                        {reviewStatus === 'reviewing' && 'AI 审核结果上链...'}
+                        {reviewStatus === 'withdrawing' && '正在执行资金释放...'}
+                      </span>
                     </div>
                     <div className="h-2 bg-[#E8E2D9] rounded-full overflow-hidden">
                       <div 
@@ -281,9 +341,7 @@ export default function ProofUploadPage() {
                       />
                     </div>
                     <p className="text-xs text-[#B8A99A] mt-2">
-                      {reviewStatus === 'uploading' 
-                        ? '正在安全上传文件...' 
-                        : 'AI 正在识别金额、日期、用途等信息...'}
+                      {getStatusText()}
                     </p>
                   </div>
                 )}
@@ -316,127 +374,56 @@ export default function ProofUploadPage() {
 
           {/* Right: Review Result */}
           <div>
-            {reviewStatus === 'complete' && reviewResult ? (
+            {reviewStatus === 'complete' ? (
               <Card className="warm-card card-shadow">
                 <CardHeader>
                   <CardTitle className="text-[#3D3D3D] flex items-center gap-2">
                     <Brain className="w-5 h-5 text-[#8FA584]" />
-                    AI 审核结果
+                    链上审核与资金释放
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Status */}
-                  <div className={`flex items-center gap-3 p-4 rounded-xl ${
-                    reviewResult.status === 'approved' 
-                      ? 'bg-[#A8B5A0]/10 border border-[#A8B5A0]/30' 
-                      : reviewResult.status === 'rejected'
-                      ? 'bg-[#C97065]/10 border border-[#C97065]/30'
-                      : 'bg-[#C4866B]/10 border border-[#C4866B]/30'
-                  }`}>
-                    <div className={getStatusColor(reviewResult.status)}>
-                      {getStatusIcon(reviewResult.status)}
-                    </div>
-                    <div>
-                      <div className={`font-semibold ${getStatusColor(reviewResult.status)}`}>
-                        {getStatusText(reviewResult.status)}
-                      </div>
-                      <div className="text-sm text-[#8A7B73]">
-                        置信度: {(reviewResult.confidence * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Extracted Info */}
                   <div className="space-y-3">
-                    <h5 className="font-medium text-[#5D4E47]">识别信息</h5>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { icon: DollarSign, label: '金额', value: `$${reviewResult.extracted.amount}` },
-                        { icon: Calendar, label: '日期', value: reviewResult.extracted.date },
-                        { icon: Building, label: '收款方', value: reviewResult.extracted.recipient },
-                        { icon: FileText, label: '用途', value: reviewResult.extracted.purpose },
-                      ].map((item, i) => (
-                        <div key={i} className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E8E2D9]">
-                          <div className="flex items-center gap-2 text-xs text-[#B8A99A] mb-1">
-                            <item.icon className="w-3 h-3" />
-                            {item.label}
-                          </div>
-                          <div className="text-[#3D3D3D] font-medium truncate">{item.value}</div>
+                    <div className="flex items-center gap-2 text-sm text-[#8FA584] bg-[#A8B5A0]/10 border border-[#A8B5A0]/30 rounded-xl p-3">
+                      <CheckCircle className="w-4 h-4" />
+                      凭证已提交并自动审核通过
+                    </div>
+                    <div className="text-sm text-[#5D4E47] bg-[#FAF7F2] border border-[#E8E2D9] rounded-xl p-3 space-y-2">
+                      <div>Proof ID: {proofId?.toString()}</div>
+                      {submitTxHash && (
+                        <div>
+                          提交交易：
+                          <a className="text-[#C4866B] ml-2" href={`https://testnet.monadexplorer.com/tx/${submitTxHash}`} target="_blank" rel="noreferrer">
+                            查看
+                          </a>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Verification Checks */}
-                  <div className="space-y-3">
-                    <h5 className="font-medium text-[#5D4E47]">验证项目</h5>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        { label: '金额匹配', pass: reviewResult.checks.amountMatch },
-                        { label: '日期有效', pass: reviewResult.checks.dateValid },
-                        { label: '格式正确', pass: reviewResult.checks.formatValid },
-                        { label: '用途匹配', pass: reviewResult.checks.purposeMatch },
-                      ].map((check, i) => (
-                        <div key={i} className={`flex items-center gap-2 p-2 rounded-lg ${check.pass ? 'bg-[#A8B5A0]/10' : 'bg-[#C97065]/10'}`}>
-                          {check.pass ? (
-                            <CheckCircle className="w-4 h-4 text-[#8FA584]" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-[#C97065]" />
-                          )}
-                          <span className="text-sm text-[#5D4E47]">{check.label}</span>
+                      )}
+                      {reviewTxHash && (
+                        <div>
+                          审核交易：
+                          <a className="text-[#C4866B] ml-2" href={`https://testnet.monadexplorer.com/tx/${reviewTxHash}`} target="_blank" rel="noreferrer">
+                            查看
+                          </a>
                         </div>
-                      ))}
+                      )}
+                      {withdrawTxHash && (
+                        <div>
+                          资金释放：
+                          <a className="text-[#C4866B] ml-2" href={`https://testnet.monadexplorer.com/tx/${withdrawTxHash}`} target="_blank" rel="noreferrer">
+                            查看
+                          </a>
+                        </div>
+                      )}
                     </div>
-                    <div className="p-3 bg-[#FAF7F2] rounded-xl border border-[#E8E2D9]">
-                      <div className="flex items-center justify-between text-sm mb-2">
-                        <span className="text-[#8A7B73]">真实性评分</span>
-                        <span className="text-[#8FA584] font-medium">
-                          {(reviewResult.checks.authenticityScore * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="h-2 bg-[#E8E2D9] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-[#A8B5A0] to-[#8FA584]"
-                          style={{ width: `${reviewResult.checks.authenticityScore * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* AI Reason */}
-                  <div className="p-4 bg-[#FAF7F2] rounded-xl border border-[#E8E2D9]">
-                    <div className="flex items-center gap-2 text-sm text-[#B8A99A] mb-2">
-                      <Brain className="w-4 h-4" />
-                      AI 审核意见
-                    </div>
-                    <p className="text-[#5D4E47] text-sm leading-relaxed">
-                      {reviewResult.reason}
-                    </p>
-                  </div>
-
-                  {/* Actions */}
-                  {reviewResult.status === 'approved' && (
-                    <div className="space-y-3">
-                      <Button className="w-full btn-warm h-12 rounded-full text-base font-semibold">
-                        <ArrowRight className="w-4 h-4 mr-2" />
-                        确认提款申请
-                      </Button>
-                      <p className="text-xs text-[#B8A99A] text-center">
-                        提款申请将提交至链上，等待里程碑资金释放
-                      </p>
-                    </div>
-                  )}
-
-                  {reviewResult.status === 'rejected' && (
                     <Button
                       onClick={resetForm}
                       variant="outline"
                       className="w-full border-[#E8E2D9] text-[#5D4E47] hover:bg-[#F5F2ED] rounded-full"
                     >
                       <RefreshCw className="w-4 h-4 mr-2" />
-                      重新上传凭证
+                      继续上传
                     </Button>
-                  )}
+                  </div>
                 </CardContent>
               </Card>
             ) : (

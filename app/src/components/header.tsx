@@ -13,6 +13,7 @@ import {
   X,
   Sparkles,
   RefreshCw,
+  Briefcase,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useUser } from '@/lib/user-context'
@@ -24,6 +25,7 @@ export function Header() {
   const donorNav = [
     { href: '/campaigns', label: '探索项目' },
     { href: '/dashboard/donor', label: '我的捐赠', icon: LayoutDashboard },
+    { href: '/dashboard/enterprise', label: '企业捐赠', icon: Briefcase },
   ]
 
   const beneficiaryNav = [
