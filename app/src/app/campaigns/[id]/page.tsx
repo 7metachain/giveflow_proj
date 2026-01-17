@@ -26,13 +26,14 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import {
-  getCampaignById,
   getDonationsByCampaign,
   formatAmount,
   formatDate,
   shortenAddress,
   getCategoryStyle,
   getCategoryImage,
+  Campaign,
+  Donation,
 } from '@/lib/mock-data'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { ConnectButton } from '@rainbow-me/rainbowkit'
@@ -48,14 +49,17 @@ export default function CampaignDetailPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [txError, setTxError] = useState<string | null>(null)
   const [txSuccess, setTxSuccess] = useState(false)
+  const [campaign, setCampaign] = useState<Campaign | null>(null)
+  const [donations, setDonations] = useState<Donation[]>([])
+  const [isPageLoading, setIsPageLoading] = useState(true)
 
   // 合约交互 hooks
   const { writeContract, data: txHash, isPending, error: writeError, reset } = useWriteContract()
-  
+
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash: txHash,
   })
-  
+
   // 监听交易成功
   useEffect(() => {
     if (isSuccess && txHash) {
@@ -65,7 +69,7 @@ export default function CampaignDetailPage() {
       setTimeout(() => setTxSuccess(false), 5000)
     }
   }, [isSuccess, txHash])
-  
+
   // 监听交易错误
   useEffect(() => {
     if (writeError) {
@@ -73,14 +77,49 @@ export default function CampaignDetailPage() {
       setTxError(writeError.message || '交易失败，请重试')
     }
   }, [writeError])
-  
+
   // 更新加载状态
   useEffect(() => {
     setIsLoading(isPending || isConfirming)
   }, [isPending, isConfirming])
 
-  const campaign = getCampaignById(params.id as string)
-  const donations = getDonationsByCampaign(params.id as string)
+  // 从 API 加载项目数据
+  useEffect(() => {
+    async function fetchCampaignData() {
+      setIsPageLoading(true)
+      try {
+        // 首先尝试从项目列表 API 中查找
+        const listResponse = await fetch('/api/campaigns')
+        if (listResponse.ok) {
+          const listData = await listResponse.json()
+          const found = listData.campaigns.find((c: Campaign) => c.id === params.id)
+          if (found) {
+            setCampaign(found)
+            setDonations([]) // 新项目暂时没有捐赠记录
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch campaign data:', error)
+      } finally {
+        setIsPageLoading(false)
+      }
+    }
+
+    if (params.id) {
+      fetchCampaignData()
+    }
+  }, [params.id])
+
+  if (isPageLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-[#D4785C] mx-auto mb-4" />
+          <p className="text-[#8B7B6E]">加载中...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!campaign) {
     return (

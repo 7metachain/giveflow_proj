@@ -361,3 +361,46 @@ export function getMilestoneStatusText(status: number): string {
   }
   return statusMap[status] || '未知状态'
 }
+
+/**
+ * 在链上创建项目（需要钱包连接）
+ *
+ * @param _signer - ethers signer实例
+ * @param _params - 项目参数
+ * @returns 交易哈希和项目ID
+ */
+export async function createCampaignOnChain(
+  _signer: any,
+  _params: {
+    title: string
+    description: string
+    category: string
+    targetAmount: number
+    deadline: number
+    metadataUri?: string
+  }
+) {
+  // 这个函数需要在前端使用wagmi或ethers.js调用
+  // 示例实现：
+  //
+  // import { writeContract } from '@wagmi/core'
+  // import { config } from '@/lib/web3'
+  //
+  // const { hash } = await writeContract(config, {
+  //   address: CONTRACT_ADDRESSES.campaignRegistry,
+  //   abi: CampaignRegistryABI,
+  //   functionName: 'createCampaign',
+  //   args: [
+  //     _params.title,
+  //     _params.description,
+  //     _params.category,
+  //     _params.targetAmount,
+  //     _params.deadline,
+  //     _params.metadataUri || ''
+  //   ]
+  // })
+  //
+  // return { txHash: hash, campaignId: '从事件日志中提取' }
+
+  throw new Error('此函数需要在前端使用wagmi实现，请使用wagmi的writeContract方法')
+}

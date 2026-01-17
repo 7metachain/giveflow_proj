@@ -17,9 +17,10 @@ import {
   Stethoscope,
   GraduationCap,
   Sparkles,
+  Plus,
 } from 'lucide-react'
 import { mockCampaigns, formatAmount, formatDate, getCategoryStyle, getCategoryImage } from '@/lib/mock-data'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const categories = [
   { name: '全部', icon: Heart },
@@ -32,8 +33,30 @@ const categories = [
 export default function CampaignsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('全部')
+  const [campaigns, setCampaigns] = useState(mockCampaigns)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const filteredCampaigns = mockCampaigns.filter((campaign) => {
+  // 从API加载项目列表
+  useEffect(() => {
+    async function fetchCampaigns() {
+      setIsLoading(true)
+      try {
+        const response = await fetch('/api/campaigns')
+        const data = await response.json()
+        if (data.success) {
+          setCampaigns(data.campaigns)
+        }
+      } catch (error) {
+        console.error('Failed to fetch campaigns:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchCampaigns()
+  }, [])
+
+  const filteredCampaigns = campaigns.filter((campaign) => {
     const matchesSearch =
       campaign.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       campaign.description.toLowerCase().includes(searchQuery.toLowerCase())
@@ -63,6 +86,17 @@ export default function CampaignsPage() {
       </div>
 
       <div className="container mx-auto px-4 py-10">
+        {/* Header with Create Button */}
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-[#2D2420]">所有项目</h2>
+          <Link href="/campaigns/create">
+            <Button className="btn-warm shadow-sm">
+              <Plus className="w-4 h-4 mr-2" />
+              发起项目
+            </Button>
+          </Link>
+        </div>
+
         {/* Search and Filter */}
         <div className="flex flex-col md:flex-row gap-4 mb-8 -mt-6 relative z-10">
           <div className="relative flex-1">

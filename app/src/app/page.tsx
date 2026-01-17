@@ -323,7 +323,7 @@ function BeneficiaryHome() {
         {/* Quick Actions */}
         <div className="grid md:grid-cols-4 gap-6 mb-12">
           {[
-            { label: '发起项目', icon: Plus, color: '#7BA089', href: '#', desc: '创建女性公益项目' },
+            { label: '发起项目', icon: Plus, color: '#7BA089', href: '/campaigns/create', desc: '创建女性公益项目' },
             { label: '上传凭证', icon: Upload, color: '#D4785C', href: '/proof/upload', desc: 'AI 审核后提款' },
             { label: '项目管理', icon: TrendingUp, color: '#E8B4A0', href: '/dashboard/beneficiary', desc: '查看筹款进度' },
             { label: '提款申请', icon: DollarSign, color: '#96B8A5', href: '/proof/upload', desc: '凭证通过后提取' },
